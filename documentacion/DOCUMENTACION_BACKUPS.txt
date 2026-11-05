@@ -1,0 +1,332 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LOS BACKUPS Y EL MODO SIN CONEXION
+  (proceso secundario + usuarios.dat + workouts/historico en JSON)
+====================================================================
+
+Que pide el enunciado: "se van a generar una serie de backups en
+archivos .dat. Esta implementacion se realiza en un proceso a parte
+para ser reutilizado en futuros proyectos. Este proceso guarda toda la
+informacion referente a los workouts, ejercicios y series. [...]
+debe garantizar tambien que los usuarios puedan loguearse sin conexion.
+Finalmente, toda la informacion relativa al historico de un usuario se
+guarda en un xml [...]. Este proceso devuelve un mensaje con el
+resultado de su ejecucion. Estos backups se realizan automaticamente
+una vez el usuario se haya logueado, y se utilizaran cuando se detecte
+que no hay conexion."
+
+DECISION DEL GRUPO (2026-10-29): usuarios.dat se queda en binario
+(.dat), pero los workouts y el historico van SIEMPRE en JSON
+(workouts.json, historico.json y pendientes_<id>.json). Y en el
+proyecto solo hay DOS main (servidor y aplicacion): el backup es una
+funcion, no un programa con su propio main.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+src/
+ |-- backup/ProcesoBackup.java       -> hacerBackup(): lo que hace el
+ |                                      proceso secundario (SIN main)
+ |-- app/InicioApp.java              -> su main, con el argumento
+ |                                      "backup", llama a hacerBackup()
+ |-- controlador/GestionVistas.java  -> lanzarBackup(),
+ |                                      crearComandoBackup()
+ |-- controlador/GestorFicheros.java -> guardar/leer los ficheros y
+ |                                      el login sin conexion
+ |-- modelo/Usuario                  -> "implements Serializable" (para
+                                        el .dat). Workout, Ejercicio,
+                                        Serie e Historico ya NO lo
+                                        necesitan (van en JSON)
+
+Los backups van FUERA del proyecto, en una carpeta GymAppBackups en el
+ESCRITORIO (GestorFicheros.CARPETA_BACKUPS):
+   C:\Users\<usuario>\Desktop\GymAppBackups\
+     |-- usuarios.dat    -> todos los usuarios (binario). SIN historico
+     |-- workouts.json   -> workouts con ejercicios y series (JSON)
+     |-- historico.json  -> SOLO el historico de cada usuario (JSON)
+     |-- pendientes_<id>.json -> workouts hechos SIN conexion que
+                                 todavia no se han subido (punto 8)
+ - Si la carpeta no existe, se crea sola (carpeta.mkdirs()).
+ - Si ya existe, cada backup SOBREESCRIBE los ficheros con los datos
+   nuevos (FileOutputStream / FileWriter borran lo que habia y
+   escriben lo nuevo).
+ - buscarEscritorio(): si el Escritorio del ordenador esta en OneDrive
+   (C:\Users\<usuario>\OneDrive\Escritorio o \Desktop) se usa ese; si
+   no, C:\Users\<usuario>\Desktop. Asi funciona en todos los ordenadores
+   del grupo sin cambiar nada.
+ - Esta FUERA del proyecto aunque el proyecto este en el Escritorio:
+   Desktop\GymApp (proyecto) y Desktop\GymAppBackups (backups) son dos
+   carpetas distintas. La rubrica lo pide: "Este almacenamiento se
+   realiza fuera de la estructura de proyecto".
+ (La carpeta "backups" que habia dentro del proyecto ya no se usa y se
+ ha quitado.)
+
+--------------------------------------------------------------------
+2. CUANDO SE HACE
+--------------------------------------------------------------------
+
+ Lo decidio el grupo (2026-10-29): "en cuanto se ejecute comprueba si
+ hay conexion [...] antes de iniciar sesion, y los backups se guardan
+ despues de cambiar cualquier cosa".
+
+ - AL ARRANCAR la aplicacion, antes del login (abrirInicio llama a
+   lanzarBackup()). Si hay conexion se hace el backup. Si NO hay
+   conexion no hay datos nuevos que copiar (el backup los saca del
+   servidor): se deja el que ya hay, y es el que se usa para entrar
+   sin conexion.
+ - DESPUES DE CADA CAMBIO que se guarda en el servidor:
+     registro de un usuario nuevo .......... registrar()
+     guardar datos del usuario (Ajustes) ... guardarDatosUsuario()
+     cambiar la contraseña (Ajustes) ....... guardarPassword()
+     eliminar la cuenta (Ajustes) .......... eliminarCuenta()
+     terminar un workout (historico + subir
+       de nivel: un solo backup) ........... guardarEnHistorico()
+     borrar un workout del historico ....... borrarDelHistorico()
+     subir los workouts hechos sin conexion
+       (al hacer login, si se sube alguno) . subirPendientes()
+ - Al hacer login ya NO se hace (no cambia nada en el servidor; el
+   backup ya se hizo al arrancar).
+
+ lanzarBackup() comprueba la conexion DENTRO de su hilo
+ (cliente.hayConexion() tarda hasta 2 s si el servidor esta apagado),
+ asi la ventana nunca se queda esperando. Sin conexion escribe:
+   [Backup] Sin conexión con el servidor: se usa el backup que ya hay
+
+ NUNCA DOS BACKUPS A LA VEZ: escribirian los mismos ficheros a la vez
+ y se podrian estropear. Con dos variables:
+   backupEnMarcha = true mientras hay uno haciendose
+   repetirBackup  = true si se ha pedido otro mientras tanto
+ - lanzarBackup(): si ya hay uno en marcha, solo pone repetirBackup =
+   true y sale. Si no, pone backupEnMarcha = true y arranca el hilo.
+ - terminarBackup() (al final del hilo): backupEnMarcha = false y, si
+   repetirBackup era true, lanza otro (asi el backup tiene tambien el
+   ultimo cambio).
+ - Las dos son "synchronized": las llaman el hilo de Swing y el hilo
+   del backup, y asi nunca a la vez (si no, los dos podrian ver
+   backupEnMarcha = false y lanzar dos).
+ Ejemplo: se piden 3 backups seguidos -> se hace 1, se apunta que hay
+ que repetir, y al terminar se hace 1 mas. Total 2, uno detras de otro
+ (probado 2026-10-29 con y sin servidor).
+
+--------------------------------------------------------------------
+3. EL PROCESO SECUNDARIO (lanzarBackup + ProcesoBackup.hacerBackup)
+--------------------------------------------------------------------
+
+ Un PROCESO es un programa que se esta ejecutando (con su propia
+ memoria). Un HILO es una tarea dentro del mismo programa. El backup
+ se hace en OTRO proceso, que la aplicacion arranca con ProcessBuilder.
+
+ Para arrancar un proceso de Java hace falta un main. Como en el
+ proyecto solo puede haber dos (Servidor e InicioApp), el proceso del
+ backup es LA MISMA aplicacion arrancada con un argumento:
+     java ... app.InicioApp backup
+ InicioApp.main mira el argumento:
+     if (args.length > 0 && args[0].equals("backup")) {
+         ProcesoBackup.hacerBackup();     // proceso del backup
+     } else {
+         ... abre las ventanas como siempre (aplicacion normal)
+     }
+ "args" son las palabras que se escriben despues del nombre de la
+ clase al arrancar. Al darle a Run en Eclipse no hay ninguna, asi que
+ se abre la aplicacion. Solo lanzarBackup pone la palabra "backup".
+ Asi el backup es una FUNCION (hacerBackup) y se sigue ejecutando en
+ otro proceso, como pide el enunciado.
+
+ GestionVistas.lanzarBackup() (dentro de un hilo, para no congelar la
+ ventana):
+  1. new ProcessBuilder(comando): el comando es como si se escribiera
+     en la consola:
+        java -Dstdout.encoding=UTF-8 -cp <librerias> app.InicioApp backup
+     crearComandoBackup() usa el mismo java (System.getProperty
+     ("java.home")) y las mismas librerias (java.class.path y, si se
+     ha arrancado como modulo, jdk.module.path) que la aplicacion.
+  2. pb.redirectErrorStream(true): los errores salen por el mismo
+     sitio que los mensajes.
+  3. pb.start(): arranca el proceso.
+  4. Se lee lo que escribe el proceso (proceso.getInputStream()) linea
+     a linea y se escribe en la consola con "[Backup] " delante.
+  5. proceso.waitFor(): espera a que el proceso termine.
+
+ backup.ProcesoBackup.hacerBackup():
+  1. Pide los datos al SERVIDOR por socket, igual que la aplicacion
+     (con Cliente): obtenerUsuarios(), obtenerWorkouts() y
+     obtenerHistoricoUsuario(id) de cada usuario.
+  2. Guarda los tres ficheros con GestorFicheros.
+  3. Escribe el MENSAJE con el resultado:
+       OK: backup de 62 usuarios y 14 workouts en C:\Users\...\Desktop\GymAppBackups
+       ERROR: no se han podido descargar los datos del servidor
+ Como no depende de las ventanas, se puede reutilizar en otro proyecto.
+
+ Ejemplo de lo que sale en la consola de la aplicacion:
+   [Backup] Backup guardado con éxito en: C:\Users\...\usuarios.dat
+   [Backup] Backup guardado con éxito en: C:\Users\...\workouts.json
+   [Backup] Backup guardado con éxito en: C:\Users\...\historico.json
+   [Backup] OK: backup de 62 usuarios y 14 workouts en C:\Users\...
+   [Backup] Proceso terminado
+
+--------------------------------------------------------------------
+4. USUARIOS.DAT (binario, "dump" de objetos)
+--------------------------------------------------------------------
+
+ guardarBackupUsuarios (GestorFicheros):
+ - ObjectOutputStream.writeObject(usuario) para cada usuario y al
+   final writeObject(null) para marcar el final.
+ - Para poder escribir un objeto asi, su clase tiene que ser
+   "Serializable". serialVersionUID = 1L es su numero de version.
+ - En Usuario el historico es "transient": NO se guarda en el .dat
+   (va en historico.json).
+ leerBackupUsuarios:
+ - ObjectInputStream.readObject() hasta que sale el null.
+ - Si el fichero no existe devuelve la lista vacia.
+
+--------------------------------------------------------------------
+5. WORKOUTS E HISTORICO EN JSON (Gson)
+--------------------------------------------------------------------
+
+ GestorFicheros tiene un Gson con el AdaptadorFecha (para LocalDate,
+ el mismo que usan Cliente y HiloCliente), setPrettyPrinting() para
+ que el fichero salga con saltos de linea y se pueda leer y
+ disableHtmlEscaping() para que las URLs se escriban tal cual.
+ escribirJson(nombreFichero, json): crea la carpeta si no existe y
+ escribe el JSON con un FileWriter en UTF-8 (tildes y ñ bien).
+
+ workouts.json (guardarBackupWorkouts / leerBackupWorkouts):
+   [ { "id": 1, "nombre": "Iniciación full body", "nivel": 0,
+       "videoURL": "...", "numEjercicios": 3,
+       "ejercicios": [ { "nombre": "Sentadilla libre", "descanso": 20,
+                         "orden": 1, "series": [ {...}, {...} ] } ] },
+     ... ]
+   - Guardar: gson.toJsonTree(workouts) -> fichero.
+   - Leer: gson.fromJson(lector, Workout[].class) -> ArrayList.
+
+ historico.json (guardarBackupHistorico / obtenerHistoricoSinConexion):
+   [ { "usuario": 1,
+       "historico": [ { "id": 2, "nombre": "Cardio suave", "nivel": 1,
+                        "fecha": "2026-10-28", "tiempoTotal": "08:16",
+                        "porcentaje": 100 } ] },
+     { "usuario": 2, "historico": [] },
+     ... ]
+   - Guardar: un JsonObject por usuario ("usuario" = id,
+     "historico" = su lista) dentro de un JsonArray.
+   - Leer: se recorre el JsonArray, se busca el del usuario y su lista
+     se pasa a Historico[] con gson.fromJson.
+   - Ventaja frente al XML: se guarda tambien el "id" del historico
+     (el de Firebase).
+ (El XML comun del profesor, assets/datosFB/historico_comun.xml, se
+ sigue leyendo con leerHistoricoXML para cargar los datos iniciales.)
+
+--------------------------------------------------------------------
+6. MODO SIN CONEXION
+--------------------------------------------------------------------
+
+ Login (comprobarLogin):
+  - cliente.hayConexion() == false -> se llama a
+    gestorFicheros.validarLoginSinConexion(email, password):
+      busca el email en usuarios.dat y comprueba la contraseña con
+      BCrypt (en el backup esta cifrada, igual que en Firebase).
+  - Si es correcto se entra con modoSinConexion = true.
+ Carga (cargarDatosEnSegundoPlano), en modo sin conexion:
+  - workouts: obtenerWorkoutsSinConexion() -> workouts.json (si todavia
+    no hay backup, los de assets/datosFB/gimnasio.json).
+  - historico: obtenerHistoricoSinConexion(id) -> historico.json. La
+    ventana del historico hace los mismos calculos (tiempo previsto)
+    que con conexion.
+ En modo sin conexion no se puede guardar nada en el servidor: Ajustes
+ dice "Modo sin conexión: ...". Los workouts que se hacen sin conexion
+ NO se pierden: ver el punto 8.
+ admin/admin sigue existiendo: entra sin servidor y sin backup (por si
+ el antivirus del instituto lo bloquea todo).
+
+--------------------------------------------------------------------
+7. PROBARLO
+--------------------------------------------------------------------
+
+ 1. Arrancar el servidor y la aplicacion: nada mas arrancar (antes
+    del login) salen en la consola las lineas [Backup] y aparece la
+    carpeta GymAppBackups en el Escritorio. Cambiar algo (por ejemplo
+    el nombre en Ajustes) y salen otra vez.
+ 2. Cerrar la aplicacion y PARAR el servidor (boton rojo de la consola
+    del servidor en Eclipse).
+ 3. Abrir la aplicacion y hacer login con el mismo usuario: entra
+    "sin conexion" (en Workouts sale "Sin conexión: ...") y se ven sus
+    workouts y su historico.
+ 4. Hacer un workout, cerrar la aplicacion y volver a entrar (sin
+    servidor): el workout sigue en el historico.
+ 5. Arrancar el servidor y hacer login: en la consola sale "Workouts
+    sin conexión subidos al servidor: 1 de 1" y, si era de su nivel al
+    100%, "Sube al nivel ...".
+
+--------------------------------------------------------------------
+8. WORKOUTS HECHOS SIN CONEXION (pendientes de subir)
+--------------------------------------------------------------------
+
+ Idea: si no se puede guardar en el servidor, se guarda en el
+ ordenador y se sube la proxima vez que haya servidor.
+
+ CUANDO SE GUARDA: en cuanto termina el workout (o se sale con SALIR),
+ igual que con conexion. No al cerrar la aplicacion: la X cierra el
+ programa del tiron y, si se cuelga o se apaga el ordenador, se
+ perderia. Guardandolo enseguida ya esta en el disco.
+
+ 1. Al terminar un workout SIN conexion (guardarEnHistorico):
+    - se añade a pendientes_<id>.json (ej: pendientes_5.json). Un fichero
+      por usuario, asi si dos personas usan el mismo ordenador no se
+      mezclan.
+    - Tambien si HAY conexion pero el servidor falla al guardarlo.
+    - Sin conexion NO se sube de nivel (no se puede guardar el nivel).
+ 2. Login SIN conexion (cargarDatosEnSegundoPlano):
+    historico = el de historico.json + los de pendientes_<id>.json.
+    Por eso no se pierden al cerrar y volver a entrar.
+ 3. Login CON conexion (subirPendientes):
+    - se manda cada pendiente al servidor (GUARDAR_HISTORICO), en el
+      orden en que se hicieron, y se sube de nivel si toca
+      (subirNivelSiToca: 100% y workout de SU nivel). Ejemplo: dos
+      workouts de Novato al 100% -> sube SOLO a Principiante, porque
+      despues del primero ya no es de su nivel. Igual que con conexion.
+    - Los que fallan se quedan en el fichero (se reintentan en el
+      siguiente login). Si no queda ninguno, se borra el fichero.
+    - Despues se hace el backup, asi historico.json ya los tiene.
+ Excepciones: el admin (id 0) y el workout de prueba no se guardan.
+ Al eliminar la cuenta tambien se borran sus pendientes.
+
+ Codigo:
+  - GestorFicheros: leerPendientes(id), guardarPendientes(id, lista)
+    (lista vacia = borra el fichero), anadirPendiente(id, historico).
+    En JSON, como el resto del historico: una lista de Historico
+    (gson.toJsonTree / gson.fromJson(lector, Historico[].class)).
+  - GestionVistas: guardarEnHistorico, subirNivelSiToca, subirPendientes.
+
+--------------------------------------------------------------------
+9. CAMBIOS DEL 2026-10-29
+--------------------------------------------------------------------
+
+ - ProcesoBackup ya no tiene main: su codigo esta en hacerBackup() y
+   el proceso se arranca con "app.InicioApp backup". Solo quedan dos
+   main en el proyecto (Servidor e InicioApp).
+ - workouts.dat -> workouts.json, historico.xml -> historico.json,
+   pendientes_<id>.dat -> pendientes_<id>.json. usuarios.dat igual.
+ - Workout, Ejercicio, Serie e Historico ya no son Serializable.
+ - Probado: backup con el servidor (codigo 0, 65 usuarios y 14
+   workouts), y guardar + leer de nuevo workouts.json, historico.json
+   y pendientes (los datos leidos son iguales a los guardados, con
+   tildes y ñ).
+ - El backup se hace al arrancar y despues de cada cambio (punto 2),
+   ya no al hacer login. Nunca hay dos a la vez.
+ - Si alguien tenia ficheros antiguos (workouts.dat, historico.xml,
+   pendientes_<id>.dat) en GymAppBackups ya no se leen; los nuevos se
+   crean en el siguiente login con conexion.
+
+--------------------------------------------------------------------
+10. CAMBIOS DEL 2026-10-31
+--------------------------------------------------------------------
+
+ - InicioApp.main mas sencillo: un if/else (con "backup" -> backup,
+   si no -> ventanas). Ya no hay System.exit ni codigo de salida: el
+   proceso termina solo al acabar hacerBackup(). El resultado se sabe
+   por el mensaje OK / ERROR.
+ - ProcesoBackup.hacerBackup() ahora es void (antes devolvia
+   true/false para el codigo de salida, que ya no se usa).
+ - URLs en los JSON: Gson cambiaba = & < > ' por codigos (el "=" se
+   guardaba como barra invertida + u003d) y las URLs se estropeaban. Arreglado
+   con disableHtmlEscaping() en el Gson de GestorFicheros (ficheros) y
+   en AdaptadorFecha.crearGson() (mensajes cliente-servidor).

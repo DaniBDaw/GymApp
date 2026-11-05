@@ -1,0 +1,156 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE Servidor.java
+  (controlador: parte "Servidor" de la arquitectura Cliente-Servidor)
+====================================================================
+
+Que es: el programa que recibe las peticiones del Cliente por un socket
+TCP y las ejecuta. Es el UNICO que habla con Firebase y con los
+ficheros (CSV, XML, JSON y .dat).
+
+No tiene codigo propio de Firebase: llama a las funciones que ya
+existian en GestionBD (y, para tres ficheros, a GestorFicheros).
+
+--------------------------------------------------------------------
+1. COMO SE ARRANCA
+--------------------------------------------------------------------
+
+ - Se ejecuta el main de Servidor (antes que la aplicacion de las
+   ventanas). Opcionalmente recibe el puerto como argumento:
+   "Servidor 5000". Si no es un numero valido se usa el 5000.
+ - Necesita el fichero assets/firebase/credenciales-firebase.json
+   (lo abre GestionBD.accesoFirebase()).
+ - Por consola escribe lo que pasa: "[Servidor] Escuchando en el
+   puerto 5000", cada cliente que se conecta o desconecta y cada
+   peticion recibida.
+
+--------------------------------------------------------------------
+2. ATRIBUTOS
+--------------------------------------------------------------------
+
+ - PUERTO_POR_DEFECTO = 5000.
+ - puerto        : puerto en el que escucha.
+ - gestionBD     : acceso a Firebase (y a los ficheros por dentro).
+ - gestorFic     : GestorFicheros para las tres peticiones de ficheros
+                   que no estan en GestionBD.
+ - gson          : Gson con adaptador de LocalDate (la fecha viaja como
+                   texto "2001-09-14").
+ - serverSocket  : el ServerSocket que espera conexiones.
+ - activo        : volatile; true mientras el servidor esta en marcha.
+
+--------------------------------------------------------------------
+3. ARRANQUE Y PARADA
+--------------------------------------------------------------------
+
+ - arrancar()   1. gestionBD.accesoFirebase()  (abre Firebase)
+                2. crea el ServerSocket en el puerto
+                3. bucle: accept() espera a un cliente y crea un
+                   HiloCliente para atenderlo (bloquea el hilo que
+                   llama a arrancar()).
+ - parar()      Pone activo = false y cierra el ServerSocket. El
+                accept() lanza una excepcion que se ignora porque es lo
+                normal al parar.
+
+--------------------------------------------------------------------
+4. HILO POR CLIENTE (clase interna HiloCliente, extends Thread)
+--------------------------------------------------------------------
+
+ - Se crea un hilo por cada cliente que se conecta, asi varios clientes
+   pueden usar el servidor a la vez sin esperarse.
+ - Dentro de run():
+      * abre un lector y un escritor en UTF-8 sobre el socket,
+      * mientras el cliente mande lineas: llama a
+        atenderPeticion(linea) y escribe la respuesta (una linea),
+      * cuando el cliente cierra la conexion (readLine() = null) el
+        hilo acaba y se cierra el socket.
+ - Si la conexion se pierde a medias lo escribe por consola y acaba.
+
+--------------------------------------------------------------------
+5. atenderPeticion: EL SWITCH/CASE
+--------------------------------------------------------------------
+
+ Recibe la linea JSON, lee el campo "accion" y, segun su valor, pide
+ los datos a Firebase o a los ficheros. Siempre devuelve una linea JSON.
+
+ FIREBASE (GestionBD)
+ Accion                 Parametros                  Que ejecuta
+ LOGIN                  email, password             validarLogin
+ REGISTRO               nombre, apellidos, email,   existeEmail y, si no
+                        password, fechaNacimiento   existe, registrarUsuario
+ EXISTE_EMAIL           email                       existeEmail
+ ACTUALIZAR_DATOS       idUsuario, nombre,          actualizarDatosUsuario
+                        apellidos, fechaNacimiento,
+                        email
+ ACTUALIZAR_PASSWORD    idUsuario, nuevaPassword    actualizarPasswordUsuario
+ COMPROBAR_PASSWORD     password, passwordCifrada   comprobarPassword
+ HISTORICO              idUsuario                   obtenerHistoricoUsuario
+ WORKOUTS               (ninguno)                   obtenerWorkouts
+ DATOS_INICIALES_FB     (ninguno)                   datosInicialesFB
+ LISTADO_USUARIOS       (ninguno)                   obtenerListadoUsuarios
+                                                    (tambien guarda el
+                                                    backup usuarios.dat)
+
+ FICHEROS
+ Accion                 Parametros     Que ejecuta
+ WORKOUTS_LOCALES       (ninguno)      GestionBD.obtenerWorkoutsLocales
+                                       (assets/datosFB/gimnasio.json)
+ HISTORICO_XML          idUsuario      GestorFicheros.obtenerHistoricoUsuarioXML
+                                       (assets/datosFB/historico_comun.xml;
+                                       si el usuario no esta devuelve lista
+                                       vacia)
+ CARGAR_USUARIOS_CSV    (ninguno)      GestorFicheros.cargarUsuariosDesdeCsv
+                                       (sube a Firebase los usuarios de
+                                       usuarios_comun.csv)
+ LEER_BACKUP_USUARIOS   (ninguno)      GestorFicheros.leerBackupUsuarios
+                                       (backups/usuarios.dat)
+
+ Cualquier otra accion -> {"ok":false,"mensaje":"Accion desconocida: X"}
+
+ Casos concretos:
+ - LOGIN: si validarLogin devuelve null (email o contraseña mal) responde
+   error "Usuario o contraseña incorrectos".
+ - REGISTRO: si el email ya existe responde error "Ya existe un usuario
+   con ese email" y no registra nada.
+ - ACTUALIZAR_DATOS / ACTUALIZAR_PASSWORD: error si GestionBD devuelve
+   false / null.
+ - ACTUALIZAR_PASSWORD devuelve en "datos" la contraseña ya cifrada
+   (BCrypt).
+
+--------------------------------------------------------------------
+6. RESPUESTAS Y PARAMETROS (metodos privados)
+--------------------------------------------------------------------
+
+ - ok(mensaje, datos)   {"ok":true,"mensaje":"...","datos":...}
+                        ("datos" solo si hay algo que devolver).
+ - error(mensaje)       {"ok":false,"mensaje":"..."}
+ - texto(peticion, campo)   Lee un campo de texto; si falta lanza
+                        IllegalArgumentException ("Falta el campo ...").
+ - entero(...), fecha(...)  Lo mismo pero convirtiendo a int y a
+                        LocalDate.
+ - crearGson()          Gson con adaptador de LocalDate (igual que el
+                        de Cliente).
+
+--------------------------------------------------------------------
+7. ERRORES
+--------------------------------------------------------------------
+
+ Todo atenderPeticion va dentro de un try/catch: si el JSON esta mal
+ formado, falta un campo o Firebase falla (por ejemplo, un fallo
+ dentro de GestionBD), el servidor NO se cae: lo escribe por consola y
+ responde {"ok":false,"mensaje":"Error en el servidor: ..."}.
+
+ Fallo ya existente en GestionBD (no se ha tocado):
+ obtenerListadoUsuarios() lanza NullPointerException si Firebase falla
+ (pone la lista a null y luego la ordena). El servidor lo captura y
+ responde con error.
+
+--------------------------------------------------------------------
+8. OTROS DETALLES
+--------------------------------------------------------------------
+
+ - Los mensajes son UNA linea JSON; por eso Gson no hace "pretty
+   printing" y los saltos de linea dentro de un texto van escapados.
+ - La contraseña de LOGIN viaja en claro por el socket y la respuesta
+   incluye el hash BCrypt del usuario (como ya hacia GestionBD).
+ - Para pasar el modelo a JSON hace falta en module-info.java:
+   "opens modelo to google.cloud.firestore, gson;".
+ - El admin/admin NO pasa por el servidor (es logica local de Cliente).

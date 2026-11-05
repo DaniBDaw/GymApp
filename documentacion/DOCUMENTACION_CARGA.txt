@@ -1,0 +1,104 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA CARGA DESPUES DEL LOGIN
+  (circulo de carga + textos, solo puntos clave)
+====================================================================
+
+Que es: despues de un login correcto sale el check, y al rato la caja
+desaparece y en el centro sale un circulo girando con textos debajo.
+Es una carga FALSA de unos 5 segundos (todavia no se carga nada).
+
+Esto pasa dentro de la ventana de login (VentanaLogin). Lo anterior
+(check de login correcto) esta en DOCUMENTACION_VENTANA_LOGIN.txt.
+
+--------------------------------------------------------------------
+1. ORDEN DE LO QUE PASA (tiempos aproximados)
+--------------------------------------------------------------------
+
+   0,0 s   admin/admin correcto -> desaparece el formulario, aparece el check
+   1,5 s   empieza la carga: la caja se desvanece y se ve el circulo
+           "Cargando datos del usuario..."
+   2,8 s   "Cargando workouts..."
+   4,0 s   "Cargando histórico..."
+   5,3 s   "Casi terminado..."
+   6,5 s   fin de la carga (en consola: "Carga terminada") -> se abre
+           la ventana principal (home) y se cierra el login
+
+--------------------------------------------------------------------
+2. FICHEROS
+--------------------------------------------------------------------
+
+ - PanelCargando.java (NUEVO): el circulo que gira. Clase propia para
+   poder usarlo en cualquier ventana.
+ - VentanaLogin.java: mostrarCarga(texto) y setTextoCarga(texto).
+ - controlador/PruebaVistas.java: la carga falsa (textos y tiempos).
+ - Estilos.java: COLOR_CARGA_FONDO (gris claro del aro).
+
+--------------------------------------------------------------------
+3. EL CIRCULO QUE GIRA (PanelCargando)
+--------------------------------------------------------------------
+
+ - Es un JPanel transparente de 64x64 que en paintComponent dibuja:
+     1. Un aro entero gris claro: drawOval.
+     2. Encima un arco negro de 90 grados: drawArc(..., angulo, 90).
+   La linea es de 6 px con puntas redondeadas: new BasicStroke(grosor,
+   CAP_ROUND, JOIN_ROUND) es el "pincel" (grosor y forma de las puntas).
+ - Para que gire: un Timer cada 16 ms (unos 60 por segundo) resta
+   6 grados a "angulo" y llama a repaint(). Restar = sentido del reloj.
+   Si baja de 0 se le suma 360 para que siga entre 0 y 359.
+ - empezar() y parar() arrancan y paran ese Timer.
+
+--------------------------------------------------------------------
+4. COMO DESAPARECE LA CAJA Y SALE EL CIRCULO (VentanaLogin)
+--------------------------------------------------------------------
+
+ - El circulo y su texto se crean al abrir la ventana (crearCarga), pero
+   ocultos. Estan centrados donde estaba la caja.
+ - mostrarCarga(texto):
+     1. Pone el texto, hace visibles el circulo y el texto y empieza
+        a girar.
+     2. Un Timer baja la opacidad de toda la caja un 5% cada 20 ms.
+        Cuando llega a 0, la caja se oculta (setVisible(false)).
+ - TRUCO: el circulo esta DETRAS de la caja. En un panel con layout null
+   lo que se anade primero se pinta encima, y la caja se anadio antes.
+   Asi, mientras la caja se desvanece, el circulo se va viendo a traves
+   de ella (fundido cruzado, sin saltos).
+ - PanelCaja tiene una opacidad para toda la caja (opacidadCaja) y otra
+   para el check (opacidad). El check se pinta con las dos multiplicadas,
+   asi desaparece junto con la caja.
+ - setTextoCarga(texto) solo cambia el texto de debajo.
+ - cerrar() para todos los Timers (fundidos y circulo) antes de dispose().
+
+--------------------------------------------------------------------
+5. LA CARGA FALSA (PruebaVistas)
+--------------------------------------------------------------------
+
+ - Los textos estan en un array y se recorren con un indice:
+
+     TEXTOS_CARGA = { "Cargando datos del usuario...", "Cargando workouts...",
+                      "Cargando histórico...", "Casi terminado..." }
+     TIEMPO_POR_TEXTO = 1250 ms  -> 4 textos x 1,25 s = 5 segundos
+
+ - Despues del login correcto, un Timer de una sola vez
+   (setRepeats(false)) espera TIEMPO_CHECK = 1500 ms y llama a
+   empezarCargaFalsa().
+ - empezarCargaFalsa():
+     1. indiceCarga = 0 y mostrarCarga(primer texto).
+     2. Timer cada 1250 ms: indiceCarga++. Si quedan textos ->
+        setTextoCarga(TEXTOS_CARGA[indiceCarga]). Si no -> para el
+        Timer y llama a terminarCarga().
+ - terminarCarga(): escribe "Carga terminada", abre la ventana principal
+   (abrirPrincipal) y DESPUES cierra el login (ventanaLogin.cerrar()).
+   En ese orden para que no se vea el escritorio entre las dos ventanas.
+   La ventana principal esta en DOCUMENTACION_VENTANA_PRINCIPAL.txt.
+
+--------------------------------------------------------------------
+6. PARA CAMBIARLO
+--------------------------------------------------------------------
+
+ - Mas o menos tiempo: TIEMPO_POR_TEXTO y TIEMPO_CHECK en PruebaVistas.
+ - Otros textos: anadir o quitar en TEXTOS_CARGA (el codigo se adapta).
+ - Circulo mas rapido: GRADOS_PASO en PanelCargando. Mas grueso: GROSOR.
+   Arco mas largo: TAMANO_ARCO.
+ - Mientras se ven los textos, un hilo (cargarDatosEnSegundoPlano)
+   trae de verdad los workouts y el historico: del servidor (Cliente)
+   o, sin conexion, de los ficheros de backup (GestorFicheros).

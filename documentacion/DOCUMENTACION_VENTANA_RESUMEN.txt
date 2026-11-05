@@ -1,0 +1,145 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA RESUMEN (VentanaResumen)
+  (solo puntos clave)
+====================================================================
+
+Que es: la ventana que sale al terminar todos los ejercicios de un
+workout (boton VER RESUMEN) o al salir antes (SALIR + confirmar).
+Muestra lo que pide el enunciado: ejercicios realizados, tiempo total,
+porcentaje de ejercicios completados y un mensaje motivacional. El
+boton Volver lleva a la lista de workouts.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/
+ |-- PANEL - Resumen.jpg    -> DISENO de referencia (no se usa)
+ |-- resumen_bg.jpg         -> fondo 900x600: blanco con las rayas negras
+ |                             de arriba a la derecha (sacadas del diseño)
+ |-- iconos/
+      |-- estado_hecho.png, estado_pendiente.png (22x22) -> lista
+      |-- nivel_custom.png (16x16, negro) -> nivel del workout de prueba
+
+src/
+ |-- vista/VentanaResumen.java      -> la ventana
+ |-- controlador/GestionVistas.java -> abrirResumen() y
+                                       ponerMensajeMotivacional()
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600.
+ - Titulo .......................... (38,96) negrita 42
+ - Workout - Nivel - fecha ......... (42,157) panel con FlowLayout
+ - Linea gris ...................... (40,196) 805x1
+ - 4 cajas de datos ................ y=218, 190x109, x = 40, 245, 450, 655
+ - "EJERCICIOS REALIZADOS" ......... (40,349)
+ - Filas de ejercicios ............. y = 380 + n*30 (icono, nombre, tiempo)
+ - Caja negra del mensaje .......... (480,350) 365x150
+ - "Volverás a la lista..." ........ (42,538)
+ - Boton Volver .................... (724,525) 121x46
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Linea "Core express - Nivel 2 - Intermedio - 24/10/2026": son tres
+   JLabel dentro de un JPanel con FlowLayout(LEFT). El FlowLayout los
+   pone uno detras de otro, asi no hay que calcular donde acaba cada
+   texto. El del medio (el nivel) va en negrita y con el color del
+   nivel (los colores de Estilos, igual que en la home y workouts).
+ - CajaDato: caja redondeada con un titulo pequeño y un valor grande.
+   La de TIEMPO TOTAL es negra, las otras blancas con borde gris.
+ - Lista de ejercicios: cargarEjercicios() crea 3 JLabel por ejercicio
+   (icono, nombre y tiempo alineado a la derecha).
+ - Mensaje: JTextArea (puede ocupar varias lineas) dentro de una caja
+   negra redondeada.
+ - Boton Volver: igual que el Volver de la ventana de detalle (blanco
+   con borde negro), para no cambiar el estilo entre pantallas.
+
+--------------------------------------------------------------------
+4. DATOS (los calcula el CONTROLADOR en abrirResumen)
+--------------------------------------------------------------------
+
+ - Titulo: "¡Workout completado!" si es el 100%, si no "Workout
+   terminado" (ha salido antes).
+ - Tiempo total: lo que marca el cronometro del workout (cronoWorkout,
+   ver DOCUMENTACION_VENTANA_WORKOUT_EN_CURSO.txt). Incluye la
+   preparacion de 5 s de cada serie y el tiempo entre ejercicios.
+ - Tiempo de cada ejercicio (lista): segundosPorEjercicio (el ejercicio
+   a medias tambien cuenta).
+ - Tiempo previsto: calcularDuracionWorkout() (series + descansos).
+ - Ejercicios: "completados / total".
+ - Completado: completados * 100 / total. Un ejercicio a medias NO
+   cuenta como completado. Ej: sale en el 2º de 4 -> 1 / 4 = 25%.
+ - Lista: check verde = completado. Gris = no completado; con su tiempo
+   si lo empezo, "--:--" si no lo empezo.
+ - Mensaje motivacional (ponerMensajeMotivacional): segun el enunciado
+   solo sale aqui, en el resumen. Hay 4 arrays de frases:
+     TITULOS_COMPLETADO / MENSAJES_COMPLETADO  -> si es el 100%
+     TITULOS_INCOMPLETO / MENSAJES_INCOMPLETO  -> si ha salido antes
+   Se elige una posicion al azar con Random.nextInt(array.length).
+   Titulo = comienzo + nombre del usuario + "!" (ej: "¡Gran trabajo,
+   Alexis!"). Para añadir frases solo hay que añadirlas al array
+   (mejor cortas: caben unas 3 lineas de 38 letras).
+
+--------------------------------------------------------------------
+5. WORKOUT DE PRUEBA "Custom" (SOLO PARA PROBAR)
+--------------------------------------------------------------------
+
+Workout "Prueba rápida", nivel "Custom" (icono negro): 1 ejercicio con
+1 serie de 3 segundos y sin descanso. Sale el primero en la lista de
+Workouts (filtro TODOS) para llegar al resumen en 3 segundos.
+
+Esta en el codigo, no en la base de datos (asi no se guarda en
+Firebase). Su nivel es -1 (NIVEL_PRUEBA).
+
+Para quitarlo:
+ - Rapido: en GestionVistas poner MOSTRAR_WORKOUT_PRUEBA = false.
+ - Del todo: borrar
+     * en GestionVistas el bloque "WORKOUT DE PRUEBA" (constantes y
+       crearWorkoutPrueba) y las lineas marcadas con "WORKOUT DE PRUEBA"
+       en cargarDatosEnSegundoPlano y obtenerNombreNivel
+     * en VentanaWorkouts el "else if" de "custom"
+     * la imagen images/iconos/nivel_custom.png
+
+--------------------------------------------------------------------
+6. CAMBIOS RESPECTO AL DISENO
+--------------------------------------------------------------------
+
+ - El nivel va con su color (en el diseño iba en gris).
+ - El boton es "Volver" blanco con borde, como el de la ventana de
+   detalle (en el diseño era "ACEPTAR" negro).
+ - Si sale antes de terminar el titulo es "Workout terminado" y los
+   ejercicios no completados salen con el icono gris.
+
+--------------------------------------------------------------------
+7. GUARDAR EN EL HISTORICO Y SUBIR DE NIVEL (guardarEnHistorico)
+--------------------------------------------------------------------
+
+ abrirResumen() llama a guardarEnHistorico(porcentaje, segundosTotales)
+ antes de enseñar el resumen:
+ - Se crea un Historico: nombre y nivel del workout, fecha de hoy,
+   tiempo total ("mm:ss" del cronometro del workout) y porcentaje
+   (ejercicios completados / total * 100). Sirve igual si ha terminado
+   o si ha salido antes con SALIR: se guarda lo que lleva.
+ - El tiempo previsto NO se guarda (la rubrica dice que se calcula y no
+   se almacena): lo calcula la ventana del historico al enseñarlo.
+ - Se añade a la lista del usuario (la home y el historico lo ven ya)
+   y se manda al servidor: cliente.guardarHistorico(id, historico)
+   -> accion GUARDAR_HISTORICO -> GestionBD.guardarHistorico() lo
+   guarda en usuarios/{id}/Historico/{siguiente id}.
+ - NO se guarda: el workout de prueba (nivel -1) y si sale sin haber
+   empezado (cronometro del workout a 0).
+ - Sin conexion (o si el servidor falla): se guarda en el ordenador
+   (pendientes_<id>.json) y se sube al servidor en el siguiente login con
+   conexion, subiendo de nivel si toca (DOCUMENTACION_BACKUPS.txt, punto 8).
+ - El admin (id 0) no guarda nada: no es un usuario de verdad.
+ - SUBIR DE NIVEL (enunciado: "al completar un workout de su nivel
+   actual se le desbloquean los del siguiente"): si porcentaje = 100,
+   el workout es de SU nivel y no esta en el maximo (4), el servidor
+   guarda nivel + 1 (accion ACTUALIZAR_NIVEL). Entonces el mensaje
+   motivacional es "¡Nivel Principiante, Ana!" + "Has completado un
+   workout de tu nivel y has subido a ..."

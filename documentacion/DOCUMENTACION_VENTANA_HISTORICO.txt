@@ -1,0 +1,142 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA HISTORICO (VentanaHistorico)
+  (solo puntos clave)
+====================================================================
+
+Que es: la lista de los workouts que ha hecho el usuario, primero los
+mas recientes. Lo que pide el enunciado: "nombre workout, nivel, tiempo
+total, tiempo previsto, fecha, porcentaje de ejercicios completados".
+Se abre desde la home (boton HISTORIAL) y desde Workouts (boton
+HISTÓRICO). VOLVER vuelve a la ventana desde la que se ha abierto.
+No habia diseño en Figma: se ha hecho con el mismo estilo que Workouts.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/
+ |-- workouts_background.jpg  -> el mismo fondo que Workouts
+ |-- iconos/logo_negro.png, iconos/nivel_<nivel>.png
+ |-- iconos/borrar.png        -> X gris al final de cada fila (20x20)
+ |-- iconos/borrar_hover.png  -> la misma X en rojo (raton encima)
+
+src/
+ |-- vista/VentanaHistorico.java    -> la ventana
+ |-- vista/EtiquetaUsuario.java     -> nombre y nivel de arriba a la
+ |                                     derecha (la misma de Workouts)
+ |-- controlador/GestionVistas.java -> abrirHistorico(desdeWorkouts),
+                                       crearFilasHistorico(),
+                                       calcularTiempoPrevisto(),
+                                       ordenarHistoricoRecientesPrimero(),
+                                       preguntarBorrarHistorico(),
+                                       borrarDelHistorico()
+ |-- controlador/Cliente.java       -> borrarHistorico(idUsuario, idHistorico)
+ |-- servidor/HiloCliente.java      -> accion BORRAR_HISTORICO
+ |-- controlador/GestionBD.java     -> borrarHistorico(idUsuario, idHistorico)
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600 (como Workouts).
+ - Logo + "GymApp" ............ (24,14)
+ - Titulo "Histórico" ......... centrado, y=84, negrita 56
+ - "8 workouts realizados" .... (51,180) negrita
+ - "Sin conexión: ..." ........ (311,180), solo en modo sin conexion
+ - Error en rojo .............. (311,180), mismo sitio (con conexion
+                                 esta libre): "No se ha podido borrar"
+ - Usuario (EtiquetaUsuario) .. (561,188), pegado a la derecha
+ - Tabla ...................... (51,232) 798x286, filas de 52 px
+ - VOLVER ..................... (25,536) 150x48, negro
+
+Columnas (anchos, suman 798): Workout 244, Nivel 150, Fecha 108,
+Tiempo 72, Previsto 88, Completado 106 y una ultima de 30 sin titulo
+para la X de borrar. Fuente mono 15 (una menos que Workouts porque hay
+mas columnas). El nombre mas largo ("Movilidad y estiramientos") cabe
+entero.
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Es una copia del estilo de VentanaWorkouts: tabla con cabecera
+   negra, filas blanco/gris, icono y color del nivel, barra de scroll
+   fina. Las filas no se pueden elegir (setRowSelectionAllowed(false)):
+   solo se puede pulsar la X del final (punto 5).
+ - "100%" sale en verde (lo ha completado entero).
+ - Si no hay filas sale "Todavía no has hecho ningún workout".
+ - cargarHistorico(filas) recibe las filas YA preparadas y ordenadas
+   por el controlador (la vista no calcula nada: MVC).
+
+--------------------------------------------------------------------
+4. CALCULOS (GestionVistas)
+--------------------------------------------------------------------
+
+ - Datos: usuarioRegistrado.getHistorico(). Se cargan despues del
+   login (del servidor o, sin conexion, de historico.json) y se añade
+   cada workout que se termina (guardarEnHistorico).
+ - Orden: ordenarHistoricoRecientesPrimero() con el metodo de la
+   burbuja por fecha (la mas reciente arriba). Se ordena una copia de
+   la lista, la del usuario no se cambia.
+ - Tiempo previsto: NO se guarda, se calcula (enunciado: "se calcula
+   dinamicamente mediante la suma de los tiempos de cada una de las
+   series [...] mas la suma de los descansos"). calcularTiempoPrevisto
+   busca el workout por su nombre y usa calcularDuracionWorkout() (la
+   misma que Detalle Workout y Resumen). Si el workout ya no existe
+   (historicos antiguos del XML comun con otro nombre) se enseña el
+   que venia guardado, o "--:--".
+ - Porcentaje: el que se guardo al terminar (ejercicios completados /
+   total * 100).
+ - Fecha: dd/MM/yyyy. Nivel: el nombre del nivel del workout.
+
+--------------------------------------------------------------------
+5. BORRAR UN WORKOUT DEL HISTORICO (la X de cada fila)
+--------------------------------------------------------------------
+
+ Para quitar del historico los workouts que el usuario no quiere ver.
+
+ Vista (VentanaHistorico):
+  - La ultima columna (COLUMNA_BORRAR) no tiene titulo: el renderer
+    (RenderCelda) le pone el icono borrar.png centrado. Es un PNG, no
+    un dibujo con Graphics2D.
+  - Con el raton encima de una X (mouseMoved) esa X se pone roja
+    (borrar_hover.png) y sale la mano. Al salir de la tabla vuelve a
+    gris. Es solo efecto visual, por eso esta en la vista.
+  - getFilaBorrar(e): devuelve la fila de la X que hay debajo del
+    raton (rowAtPoint / columnAtPoint) o -1 si no esta en una X.
+  - Sin conexion (setModoSinConexion(true)) no se pintan las X y
+    getFilaBorrar devuelve siempre -1: sin servidor no se puede borrar
+    (igual que ELIMINAR CUENTA en Ajustes).
+
+ Controlador (GestionVistas):
+  1. abrirHistorico le pone un MouseListener a la tabla (getTabla()).
+     Al hacer clic: fila = getFilaBorrar(e); si es >= 0 ->
+     preguntarBorrarHistorico(historicoEnTabla.get(fila)).
+     historicoEnTabla es la lista en el MISMO orden que las filas
+     (crearFilasHistorico la guarda despues de ordenarla).
+  2. preguntarBorrarHistorico: el aviso con el fondo borroso
+     (DialogoSalir con boton rojo): "¿Borrar del histórico?" /
+     "Se borrará Cardio suave del 28/10/2026. Esta acción no se puede
+     deshacer." CANCELAR / BORRAR.
+  3. borrarDelHistorico:
+     - id distinto de 0 -> cliente.borrarHistorico(idUsuario, id) ->
+       el servidor (BORRAR_HISTORICO) borra el documento
+       usuarios/{id}/Historico/{idHistorico} de Firebase.
+       Si falla: "No se ha podido borrar" en rojo y no se quita.
+     - id 0 -> nunca llego al servidor (se guardo en
+       pendientes_<id>.json porque el servidor fallo): se quita de ese
+       fichero para que no se suba en el proximo login.
+     - Se quita de usuarioRegistrado.getHistorico() (asi la home deja
+       de contarlo) y se recarga la tabla.
+
+ Para saber el id de un workout que se acaba de hacer: al guardarlo
+ (GUARDAR_HISTORICO) el servidor contesta con el id que le ha dado
+ ("idHistorico") y Cliente.guardarHistorico se lo pone al objeto.
+ Asi tambien se puede borrar un workout hecho en esta misma sesion.
+
+ Despues de borrar se rehace el backup (lanzarBackup), asi
+ historico.json ya no lleva el workout borrado.
+
+ Probado (2026-10-29) con el servidor: usuario de prueba, guardar 2
+ workouts (ids 2 y 3), borrar el 2 -> el servidor solo devuelve el 3;
+ el backup siguiente tampoco lo lleva. Usuario de prueba borrado.

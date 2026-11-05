@@ -1,0 +1,178 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA DE LOGIN (VentanaLogin)
+  (solo puntos clave)
+====================================================================
+
+Que es: la ventana que sale despues de la de inicio. Caja negra con
+usuario, contrasena, boton REGISTRAR y boton de entrar (triangulo).
+Usuario de prueba: admin / admin.
+
+--------------------------------------------------------------------
+1. FICHEROS NUEVOS
+--------------------------------------------------------------------
+
+images/   (en la raiz del proyecto, no en src)
+ |-- panel_login.png              -> solo es el DISENO de referencia
+ |                                    (no se usa en el codigo)
+ |-- general_background1.jpg       -> fondo normal (900x590)
+ |-- geenral_errorBackground.jpg   -> fondo de error, formas rojas (900x590)
+ |-- login_correct.jpg             -> check de login correcto, original
+ |-- login_correct.png             -> el mismo con las esquinas ya
+ |                                    redondeadas (es el que se usa)
+ |-- iconos/logo_blanco.png        -> logo pequeno de la caja (44x22)
+ |-- iconos/entrar.png             -> triangulo del boton de entrar (22x22)
+
+src/vista/
+ |-- VentanaLogin.java     -> la ventana de login
+ |-- PanelFondo.java       -> panel con imagen de fondo (antes estaba
+ |                            dentro de VentanaInicio, ahora lo usan todas)
+ |-- UtilidadesVista.java  -> cargarImagen() y obtenerFechaHoy()
+ |                            (antes en VentanaInicio, ahora compartidos)
+
+--------------------------------------------------------------------
+2. COMO SE HIZO EL DISENO
+--------------------------------------------------------------------
+
+ - panel_login.png es una imagen, no se puede escribir en ella. Por eso
+   el diseno se rehace con componentes Swing de verdad encima de
+   general_background1.jpg, en las mismas posiciones.
+ - Caja negra: clase interna PanelCaja, un JPanel que pinta
+   fillRoundRect (esquinas redondeadas). Dentro van los componentes.
+ - Campos: JTextField y JPasswordField negros, texto blanco, borde blanco
+   redondeado de 3 px (darEstiloCampo y crearBordeCampo, que usa
+   new BordeRedondeado(color, 3)). Lo mismo en el registro.
+ - Botones: clase interna BotonClaro (blanco, texto negro, esquinas
+   redondeadas con fillRoundRect y Estilos.ARCO_BOTON). En
+   paintComponent mira getModel().isRollover(): si el raton esta encima
+   se pinta gris claro. Asi no hace falta ningun listener.
+ - Estilo comun de botones y campos: ver DOCUMENTACION_ESTILO_COMUN.txt
+ - Boton de entrar: icono iconos/entrar.png con setIcon().
+ - Logo pequeno en blanco encima de "LOGIN": un JLabel con la imagen
+   iconos/logo_blanco.png.
+ - Fecha arriba: UtilidadesVista.obtenerFechaHoy(), la misma que en Inicio.
+ - Icono y cursor propios: las mismas lineas que en VentanaInicio.
+
+Medidas (para hacer disenos que encajen):
+ - Ventana: 900x590 (lo que mide el fondo).
+ - Caja: 384x392, esquina arriba-izquierda en x=258, y=104.
+   Esquinas: ARCO_CAJA = 30 en fillRoundRect (= radio de 15 px).
+ - Dentro de la caja (posiciones desde la esquina de la caja):
+     Logo blanco      centrado, y=26, 44x22
+     "LOGIN"          centrado, y=50, alto 64 (fuente 52 negrita)
+     "USUARIO"        centrado, y=144
+     Campo usuario    x=63, y=168, 258x34
+     "CONTRASEÑA"     centrado, y=222
+     Campo password   x=63, y=246, 258x34
+     REGISTRAR        x=63, y=312, 118x40
+     Boton entrar     x=191, y=312, 130x40
+ - Texto de error: fuera de la caja, centrado, y=510 de la ventana.
+ - Una imagen para la caja: 384x392 en PNG con las esquinas ya
+   redondeadas (radio de 15 px), como login_correct.png.
+
+--------------------------------------------------------------------
+3. TECLA ENTER
+--------------------------------------------------------------------
+
+   getRootPane().setDefaultButton(btnEntrar);
+
+ - Con esto, pulsar Enter en cualquier campo es como pulsar el boton
+   de entrar.
+ - Los botones tienen setFocusable(false): el tabulador solo pasa por
+   usuario -> contrasena.
+
+--------------------------------------------------------------------
+4. VALIDACIONES (admin / admin)
+--------------------------------------------------------------------
+
+Donde: controlador/PruebaVistas.java -> metodo comprobarLogin()
+(PruebaVistas hace de controlador de prueba. En el proyecto real este
+metodo va al ControladorLogin.)
+
+Orden de comprobacion (se hace al pulsar el boton o Enter):
+
+  Caso                         Mensaje                                Borde rojo
+  ---------------------------  -------------------------------------  ----------
+  1. Los dos vacios            Introduce el usuario y la contraseña   los dos
+  2. Usuario vacio             El usuario no puede estar vacío        usuario
+  3. Contrasena vacia          La contraseña no puede estar vacía     contrasena
+  4. Datos incorrectos         Usuario o contraseña incorrectos       los dos
+                               (ademas se vacia la contrasena)
+  5. admin / admin             Sale el check en la caja (punto 6)     -
+                               y luego la carga (DOCUMENTACION_CARGA.txt)
+
+ - El usuario se compara con trim(): solo espacios cuenta como vacio.
+ - Antes de comprobar se llama a limpiarErrores(), asi no se quedan
+   errores de antes.
+ - El cursor de escritura se pone en el campo que hay que corregir
+   (enfocarUsuario / enfocarPassword).
+
+--------------------------------------------------------------------
+5. COMO SE MUESTRA EL ERROR
+--------------------------------------------------------------------
+
+Metodos de VentanaLogin que usa el controlador:
+
+ - mostrarError(mensaje):
+     * pone el texto en lblError (rojo, letra pequena, centrado debajo
+       de la caja) y lo hace visible.
+     * cambia el fondo: panelFondo.setImagen(RUTA_FONDO_ERROR).
+ - limpiarErrores(): oculta el texto, vuelve al fondo normal y pone los
+   bordes blancos otra vez.
+ - marcarErrorUsuario() / marcarErrorPassword(): borde rojo en el campo.
+
+PanelFondo.setImagen(ruta) carga la otra imagen y llama a repaint().
+Los dos fondos miden lo mismo, asi que la ventana no cambia de tamano.
+
+--------------------------------------------------------------------
+6. LOGIN CORRECTO (imagen login_correct.png)
+--------------------------------------------------------------------
+
+Donde: VentanaLogin.java -> mostrarLoginCorrecto() y clase PanelCaja
+
+ - login_correct.png mide 384x392, igual que la caja, y ya tiene las
+   esquinas redondeadas igual que la caja (transparentes).
+ - mostrarLoginCorrecto():
+     1. limpiarErrores() -> fondo normal otra vez.
+     2. Con un for se ocultan todos los componentes de la caja
+        (logo, titulo, campos, botones).
+     3. setDefaultButton(null) -> Enter ya no hace nada.
+     4. Se carga la imagen y se le pasa a PanelCaja (setImagen).
+     5. Un Timer cada 20 ms sube la opacidad un 5% (0 -> 1 en ~400 ms).
+ - PanelCaja pinta primero la caja negra y encima la imagen con
+   AlphaComposite.getInstance(SRC_OVER, opacidad).
+ - Como la imagen tambien tiene fondo negro, solo se ve aparecer el check.
+
+ >>> Lo que pasa DESPUES del check (la caja desaparece y sale el circulo
+     de carga con los textos) esta explicado en otro fichero:
+     DOCUMENTACION_CARGA.txt
+
+--------------------------------------------------------------------
+7. PROBARLA
+--------------------------------------------------------------------
+
+1. Run As -> Java Application en servidor/Servidor.java (el servidor).
+2. Run As -> Java Application en app/InicioApp.java (la aplicacion).
+Inicio -> clic o tecla -> Login -> email y contraseña -> carga ->
+ventana principal (DOCUMENTACION_VENTANA_PRINCIPAL.txt). Desde la
+principal, el boton de cerrar sesion vuelve a abrir un login nuevo.
+
+Que pasa al pulsar Entrar (comprobarLogin):
+ - admin/admin -> entra sin servidor (modo sin conexion).
+ - Hay servidor (cliente.hayConexion()) -> el servidor comprueba el
+   email y la contraseña en Firebase. Si estan bien, se suben los
+   workouts hechos sin conexion (si hay) y se entra. El backup NO se
+   hace aqui: se hace al arrancar la aplicacion y despues de cada
+   cambio (DOCUMENTACION_BACKUPS.txt, punto 2). Si no:
+   "El email o la contraseña no son correctos".
+ - NO hay servidor -> se busca el usuario en el backup usuarios.dat
+   (DOCUMENTACION_BACKUPS.txt). Si esta y la contraseña coincide, se
+   entra en modo sin conexion. Si no: "Sin conexión: email o
+   contraseña no válidos".
+
+--------------------------------------------------------------------
+8. AL PASARLO AL PROYECTO REAL
+--------------------------------------------------------------------
+
+ - Copiar los ficheros nuevos (ver punto 1) junto con los de antes.
+ - HECHO: comprobarLogin() esta en GestionVistas y el login se
+   comprueba en el servidor (y sin conexion, en el backup).

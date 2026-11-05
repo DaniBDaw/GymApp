@@ -1,0 +1,176 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LOS DATOS DEL USUARIO EN LA HOME
+  (de datos de prueba "Alexis" a los datos reales de Firebase)
+  (solo puntos clave)
+====================================================================
+
+Que es: antes la ventana principal (home) siempre ponia los mismos
+datos falsos: "Alexis", "Intermedio → Avanzado", "0.5h", "12 workouts"
+y "ayer". Ahora pone los datos del usuario que ha hecho login.
+
+--------------------------------------------------------------------
+1. FICHEROS QUE SE HAN CAMBIADO
+--------------------------------------------------------------------
+
+ - src/controlador/GestionVistas.java   -> UNICO fichero de codigo
+ - documentacion/DOCUMENTACION_VENTANA_PRINCIPAL.txt -> punto 5b
+
+NO se ha tocado:
+ - vista/VentanaPrincipal.java (la ventana ya tenia los set...)
+ - modelo/Usuario.java y modelo/Historico.java
+ - controlador/GestionBD.java
+
+Asi se sigue el MVC: el controlador busca los datos y la vista solo
+los ensena.
+
+--------------------------------------------------------------------
+2. QUE SE HA QUITADO
+--------------------------------------------------------------------
+
+En GestionVistas se han borrado las constantes de prueba:
+   NOMBRE_PRUEBA = "Alexis"
+   NIVEL_PRUEBA = "Intermedio"
+   SIGUIENTE_NIVEL_PRUEBA = "Avanzado"
+   TIEMPO_PRUEBA = "0.5h"
+   WORKOUTS_PRUEBA = 12
+   ULTIMO_WORKOUT_PRUEBA = "ayer"
+
+Y en abrirPrincipal() las 4 lineas que las usaban se han cambiado por
+una sola llamada:
+   ponerDatosUsuario();
+
+--------------------------------------------------------------------
+3. QUE SE HA ANADIDO (en GestionVistas)
+--------------------------------------------------------------------
+
+ - Constante NIVELES:
+     { "Principiante", "Intermedio", "Avanzado" }
+   La posicion en el array es el numero que se guarda en Firebase:
+     0 = Principiante, 1 = Intermedio, 2 = Avanzado
+   (al registrarse, GestionBD guarda nivel = 0).
+
+ - Constante FORMATO_ULTIMO_WORKOUT: "dd/MM/yyyy".
+
+ - Metodo ponerDatosUsuario()
+ - Metodo textoUltimoWorkout(LocalDate fecha)
+
+ - Imports nuevos: java.util.ArrayList y modelo.Historico.
+
+--------------------------------------------------------------------
+4. EL RECORRIDO DE LOS DATOS (paso a paso)
+--------------------------------------------------------------------
+
+ 1. El usuario escribe email y contraseña y pulsa Entrar.
+ 2. comprobarLogin() llama a cliente.validarLogin(email, password).
+    Cliente se lo pide al SERVIDOR por socket (accion LOGIN, en JSON)
+    y el servidor llama a GestionBD.validarLogin (ver
+    DOCUMENTACION_CLIENTE_SERVIDOR.txt). Si no hay servidor, se busca
+    en el backup usuarios.dat (ver DOCUMENTACION_BACKUPS.txt).
+ 3. GestionBD busca el usuario en Firebase y devuelve un objeto Usuario
+    (o null si no existe o la contraseña esta mal). Viaja al cliente
+    como JSON y Gson lo vuelve a convertir en un objeto Usuario.
+    El id del usuario no es un campo del documento, es el nombre del
+    documento ("1", "2"...): devolverUsuario() lo pone con
+    usuario.setId(leerIdDocumento(document)). Sin eso el id era 0 y no
+    se encontraba su historico (ni se podia guardar en Ajustes).
+    devolverUsuario() NO carga el historico (desde 2026-10-31): la
+    aplicacion lo pide aparte durante la carga (OBTENER_HISTORICO ->
+    GestionBD.obtenerHistoricoUsuario). Antes se cargaba tambien aqui,
+    pero no servia: Usuario.historico es "transient" y Gson no lo manda
+    al cliente.
+ 4. Ese Usuario se guarda en la variable usuarioRegistrado.
+ 5. Despues de la carga, abrirPrincipal() crea la ventana y llama a
+    ponerDatosUsuario().
+ 6. ponerDatosUsuario() saca los datos de usuarioRegistrado y se los
+    pasa a la ventana con sus metodos set...
+
+--------------------------------------------------------------------
+5. COMO SE CALCULA CADA DATO (ponerDatosUsuario)
+--------------------------------------------------------------------
+
+ - NOMBRE
+     ventanaPrincipal.setNombreUsuario(usuarioRegistrado.getNombre());
+
+ - NIVEL
+     int nivel = usuarioRegistrado.getNivel();
+   * obtenerNombreNivel(nivel) -> NOMBRES_NIVEL[nivel]:
+       0 Novato, 1 Principiante, 2 Intermedio, 3 Avanzado, 4 Experto
+     (si el numero es menor que 0 se usa 0; si es mayor que 4, el 4)
+   * Siguiente nivel = el de nivel + 1, solo si nivel < NIVEL_MAXIMO
+     (4). Si ya esta en el maximo, siguiente = null y la ventana pone
+     "· Nivel máximo".
+   * Ejemplos:
+       nivel 0 -> "Novato → Principiante"
+       nivel 2 -> "Intermedio → Avanzado"
+       nivel 4 -> "Experto · Nivel máximo"
+
+ - HISTORICO (tiempo, numero de workouts y ultimo)
+   * Se coge usuarioRegistrado.getHistorico(). Si es null se usa una
+     lista vacia (para que no de NullPointerException).
+   * Un bucle for recorre todos los Historico y:
+       - suma el tiempoTotal ("mm:ss", convertirASegundos) en
+         segundosTotales
+       - se queda con la fecha mas reciente en ultimaFecha
+         (isAfter() dice si una fecha es posterior a otra)
+
+ - TIEMPO TOTAL: formatearTiempoTotal(segundosTotales)
+     0 -> "0 min", 1500 -> "25 min", 4800 -> "1h 20min"
+
+ - WORKOUTS COMPLETADOS
+     historico.size()  (cuantos hay en la lista)
+
+ - ULTIMO WORKOUT: la fecha mas reciente en formato "dd/MM/yyyy"
+   (FORMATO_ULTIMO_WORKOUT). Sin fecha -> null (la ventana no pone la
+   parte "Último").
+
+ - Usuario nuevo (historico vacio): "Tiempo total entrenando: 0 min" y
+   "Aún no has completado ningún workout".
+
+--------------------------------------------------------------------
+6. COSAS A TENER EN CUENTA
+--------------------------------------------------------------------
+
+ - Para anadir un nivel nuevo: anadir su nombre al array NIVELES, su
+   color en Estilos (y en obtenerColorNivel de VentanaPrincipal y de
+   VentanaAjustes) y su
+   icono images/iconos/nivel_<nombre>.png.
+ - Fechas y Firebase: Firebase no sabe leer un LocalDate directamente.
+     * Usuario (fechaNacimiento) se lee con document.toObject(Usuario
+       .class), por eso tiene el truco del @PropertyName("fecNacimiento")
+       con un getter/setter de texto (setFecNacimientoString pasa el
+       texto "2004-05-12" a LocalDate).
+     * Historico (fecha) NO lo necesita: se lee campo a campo en
+       GestionBD.obtenerHistoricoUsuario (LocalDate.parse de la fecha).
+       Desde 2026-10-31 Historico es una clase normal, sin anotaciones
+       de Firebase.
+
+--------------------------------------------------------------------
+7. OTRO CAMBIO DEL MISMO DIA: module-info.java
+--------------------------------------------------------------------
+
+ - Se anadieron dos lineas:
+     requires com.google.auth;     (para com.google.auth.Credentials)
+     requires google.cloud.core;   (para com.google.cloud.Service)
+ - Sin ellas, en VS Code salia "Unresolved compilation problem"
+   (GestionBD usa clases de esas dos librerias). No cambian nada en
+   Eclipse ni en el pom.xml: las librerias ya venian con Firebase.
+
+--------------------------------------------------------------------
+8. REVISION DEL CODIGO 2026-10-31 (limpieza, sin cambios visibles)
+--------------------------------------------------------------------
+
+ Se ha revisado todo el proyecto para dejarlo mas facil de leer:
+ - GestionBD.devolverUsuario: ya no carga el historico (no se usaba,
+   ver punto 4). Historico ya no tiene @Exclude / @PropertyName ni
+   getFechaString / setFechaString.
+ - GestionBD.obtenerListadoUsuarios: se quita el LocalDate.parse de la
+   fecha de nacimiento (lo hacia dos veces: toObject ya lo hace con el
+   @PropertyName de Usuario). El id se lee con leerIdDocumento, como en
+   devolverUsuario.
+ - Codigo que no se usaba en ningun sitio: GestionBD (bloque comentado
+   obtenerCantidadHistoricosPorUsuario), VentanaLogin (vaciarPassword,
+   getTxtUsuario, getTxtPassword), VentanaInicio (getLblPulsar).
+ - Quitados los comentarios "NUEVO" que habian quedado.
+ - Probado: compila; con Firebase, los 65 usuarios se leen con su fecha
+   de nacimiento, devolverUsuario devuelve el usuario por email y el
+   historico se sigue leyendo con obtenerHistoricoUsuario.

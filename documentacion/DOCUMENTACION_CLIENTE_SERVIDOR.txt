@@ -1,0 +1,232 @@
+====================================================================
+  GYMAPP - DOCUMENTACION CLIENTE / SERVIDOR (sockets + JSON)
+  (solo puntos clave, para poder explicarlo en la defensa)
+====================================================================
+
+Que pide el enunciado: "Una aplicacion de escritorio (Cliente) se
+conecta a un Servidor, quien tiene el respaldo de una Base de Datos
+documental. La comunicacion Cliente / Servidor se realiza mediante el
+protocolo TCP (sockets) y JSON."
+
+Antes:  ventanas -> GestionVistas -> GestionBD -> Firebase
+Ahora:  ventanas -> GestionVistas -> Cliente ==socket+JSON==>
+        Servidor -> HiloCliente -> GestionBD -> Firebase
+
+La aplicacion ya NO toca Firebase. Solo el servidor tiene las
+credenciales (assets/firebase/credenciales-firebase.json) y usa
+GestionBD. GestionBD y GestorFicheros siguen igual que antes: ahora los
+usa el servidor.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+src/
+ |-- servidor/Servidor.java        -> main del SERVIDOR: ServerSocket
+ |-- servidor/HiloCliente.java     -> hilo que atiende una conexion
+ |-- controlador/Cliente.java      -> la aplicacion habla con el
+ |                                    servidor desde aqui (Socket)
+ |-- controlador/AdaptadorFecha.java -> Gson: LocalDate <-> "2004-05-12"
+ |-- controlador/GestionBD.java    -> Firebase (lo usa el servidor)
+ |-- controlador/GestionVistas.java -> usa "cliente." en vez de
+ |                                    "gestionBD."
+ |-- app/InicioApp.java            -> main de la APLICACION (ya no se
+ |                                    conecta a Firebase). Con el
+ |                                    argumento "backup" hace el backup
+ |                                    (proceso secundario, ver
+ |                                    DOCUMENTACION_BACKUPS.txt)
+ |-- module-info.java              -> "opens modelo to ..., gson"
+
+Es UN solo proyecto con DOS programas (dos main): el servidor y la
+aplicacion (decidido con el grupo). No hay mas main: el backup es una
+funcion (ProcesoBackup.hacerBackup) que se ejecuta en otro proceso
+arrancando el main de la aplicacion con el argumento "backup".
+El paquete servidor/ solo lo usa el servidor.
+
+--------------------------------------------------------------------
+2. COMO ARRANCARLO
+--------------------------------------------------------------------
+
+ 1. Run As -> Java Application en servidor/Servidor.java
+    En la consola sale: "Servidor GymApp esperando clientes en el
+    puerto 5000". Se deja abierto.
+ 2. Run As -> Java Application en app/InicioApp.java (la aplicacion).
+    Se pueden abrir varias a la vez: el servidor las atiende a todas.
+
+ Si el servidor no esta encendido, la aplicacion funciona en modo sin
+ conexion con los ficheros de backup (DOCUMENTACION_BACKUPS.txt).
+ Si el servidor va en otro ordenador: en Cliente.java cambiar
+ IP_SERVIDOR = "localhost" por la IP de ese ordenador.
+
+--------------------------------------------------------------------
+3. EL SERVIDOR (Servidor + HiloCliente)
+--------------------------------------------------------------------
+
+ Servidor.main():
+  1. gestionBD.accesoFirebase() -> se conecta a Firebase.
+  2. new ServerSocket(5000) -> abre el puerto.
+  3. while (true): servidor.accept() se queda esperando hasta que se
+     conecta un cliente y devuelve su Socket. Con ese socket se crea
+     un HiloCliente y se arranca con start(). El bucle vuelve a
+     esperar al siguiente cliente.
+
+ Por que un HILO por conexion: si el servidor atendiera las peticiones
+ el mismo, mientras busca en Firebase (tarda unos segundos) no podria
+ atender a nadie mas. Con un hilo por conexion atiende a varios
+ clientes a la vez.
+
+ HiloCliente.run():
+  1. Lee UNA linea del socket (BufferedReader.readLine): la peticion
+     en JSON. Si es null, el cliente solo estaba comprobando si el
+     servidor esta encendido (hayConexion) y no hay nada que hacer.
+  2. gson.fromJson(linea, JsonObject.class): texto -> JsonObject.
+  3. atenderPeticion(): un switch con la "accion" llama al metodo que
+     toca de GestionBD.
+  4. Contesta con UNA linea JSON (PrintWriter.println). Siempre lleva
+     "ok": true o false.
+  5. Se cierra el socket (try con recursos) y el hilo termina.
+ Si la peticion esta mal (falta un dato...) contesta {"ok":false,
+ "mensaje":"Petición incorrecta"} en vez de romperse.
+
+--------------------------------------------------------------------
+4. EL CLIENTE (Cliente.java)
+--------------------------------------------------------------------
+
+ Tiene los mismos metodos que GestionBD (validarLogin, existeEmail,
+ obtenerWorkouts...), por eso en GestionVistas solo ha cambiado
+ "gestionBD.xxx(...)" por "cliente.xxx(...)".
+
+ Cada metodo:
+  1. crearPeticion("LOGIN") + addProperty("email", ...) ...
+  2. enviar(peticion):
+     - new Socket() + connect(IP, 5000, 2 segundos maximo)
+     - PrintWriter.println(peticion)      -> envia la linea JSON
+     - BufferedReader.readLine()          -> espera la respuesta
+       (60 segundos maximo: setSoTimeout)
+     - se cierra el socket (try con recursos)
+     Si no se puede conectar o no contesta, devuelve null.
+  3. esCorrecta(respuesta): no es null y "ok" es true.
+  4. Pasa el JSON a objetos: gson.fromJson(json, Usuario.class) o, para
+     listas, gson.fromJson(json, Workout[].class) y se copia a un
+     ArrayList.
+
+ hayConexion(): solo intenta conectar y cierra. Lo usa el login (y el
+ registro) para saber si se trabaja con el servidor o sin conexion.
+
+ Cada peticion abre y cierra su propia conexion (como llamar por
+ telefono, preguntar y colgar). Es lo mas sencillo: no hay que
+ mantener una conexion abierta ni controlar si se ha cortado.
+
+ Codificacion: UTF-8 en los dos lados (InputStreamReader /
+ OutputStreamWriter con StandardCharsets.UTF_8) para las tildes y la ñ.
+
+--------------------------------------------------------------------
+5. LOS MENSAJES (protocolo)
+--------------------------------------------------------------------
+
+ Una linea JSON de ida y una de vuelta. Ejemplo de login:
+   cliente  -> {"accion":"LOGIN","email":"ana@mail.com","password":"123456"}
+   servidor -> {"ok":true,"usuario":{"id":2,"nombre":"Ana",...,"nivel":3}}
+   servidor -> {"ok":false}                      (si esta mal)
+
+ ACCION            CRUD  ENVIA                         RESPUESTA
+ ----------------- ----  ----------------------------- -----------------------
+ LOGIN              R    email, password               usuario
+ EXISTE_EMAIL       R    email                         existe (true/false)
+ REGISTRO           C    nombre, apellidos, email,     ok (false si el email
+                         password, fechaNacimiento     ya existe)
+ ACTUALIZAR_DATOS   U    id, nombre, apellidos,        ok
+                         fechaNacimiento, email
+ CAMBIAR_PASSWORD   U    id, password                  passwordCifrada
+ ACTUALIZAR_NIVEL   U    id, nivel                     ok
+ BORRAR_USUARIO     D    id                            ok
+ OBTENER_USUARIOS   R    -                             usuarios (lista)
+ OBTENER_WORKOUTS   R    -                             workouts (lista, con
+                                                       ejercicios y series)
+ OBTENER_HISTORICO  R    id                            historico (lista)
+ GUARDAR_HISTORICO  C    id, historico (objeto)        idHistorico (el id con
+                                                       el que se ha guardado)
+ BORRAR_HISTORICO   D    id, idHistorico               ok
+
+ Asi hay al menos una operacion de cada tipo del CRUD (rubrica):
+ C = REGISTRO / GUARDAR_HISTORICO, R = LOGIN / OBTENER_..., U =
+ ACTUALIZAR_DATOS / CAMBIAR_PASSWORD / ACTUALIZAR_NIVEL,
+ D = BORRAR_USUARIO (boton ELIMINAR CUENTA en Ajustes) /
+ BORRAR_HISTORICO (la X de cada fila en la ventana Histórico).
+
+--------------------------------------------------------------------
+6. JSON <-> OBJETOS (Gson)
+--------------------------------------------------------------------
+
+ - Objeto -> JSON: gson.toJsonTree(usuario) (el servidor al contestar,
+   el cliente al mandar un Historico).
+ - JSON -> Objeto: gson.fromJson(json, Usuario.class) (el cliente al
+   recibir, el servidor al recibir un Historico).
+ - Las fechas: Usuario y Historico tienen un LocalDate. Gson no sabe
+   convertirlo solo (con Java 21 da error), asi que AdaptadorFecha le
+   enseña: LocalDate -> "2004-05-12" y "2004-05-12" -> LocalDate.
+   AdaptadorFecha.crearGson() devuelve un Gson que ya lo usa. Lo
+   usan Cliente y HiloCliente.
+ - URLs (video, fotos): crearGson() lleva disableHtmlEscaping(). Sin
+   eso Gson cambia = & < > ' por codigos y "watch?v=abc" no llegaba
+   tal cual (arreglado 2026-10-31).
+ - El historico del usuario (Usuario.historico) es "transient": Gson
+   no lo manda con el usuario. Se pide aparte con OBTENER_HISTORICO.
+ - module-info.java: "opens modelo to google.cloud.firestore, gson".
+   Gson tiene que crear los objetos del modelo y rellenar sus
+   atributos; sin el opens no le deja.
+
+--------------------------------------------------------------------
+7. CAMBIOS EN GESTIONBD (servidor)
+--------------------------------------------------------------------
+
+ Nuevos:
+ - borrarUsuario(id): primero borra los documentos de su subcoleccion
+   Historico (Firestore no las borra solas) y despues el usuario.
+ - guardarHistorico(idUsuario, historico): guarda un workout hecho.
+ - actualizarNivelUsuario(id, nivel): sube de nivel.
+ - obtenerSiguienteId(coleccion): id mas alto + 1.
+ Arreglados:
+ - registrarUsuario: ahora devuelve true/false y el id nuevo es el
+   mas alto + 1. Antes era "numero de usuarios + 1": si se borraba un
+   usuario, el siguiente que se registrara pisaba al ultimo.
+ - obtenerListadoUsuarios: devuelve la lista (antes era void y si no
+   habia conexion daba NullPointerException). La usa el backup.
+ - obtenerHistoricoUsuario: se salta el documento vacio que se crea
+   al registrarse (antes contaba como "1 workout hecho").
+ - agregarHistoricoPorUsuario: el bucle se dejaba el ultimo historico
+   del XML (size() - 1). Solo se usa al cargar los datos iniciales.
+ Quitados (ya no hacian falta en el servidor):
+ - esUsuarioAdmin / crearUsuarioAdmin -> pasados a GestionVistas (el
+   admin entra sin servidor).
+ - obtenerWorkoutsLocales -> ahora es
+   GestorFicheros.obtenerWorkoutsSinConexion() (backup o gimnasio.json).
+ - comprobarPassword -> la contraseña actual se comprueba en el
+   servidor con LOGIN.
+ - datosInicialesFB(): la llamada esta comentada en Servidor.main
+   (antes en InicioApp). Solo hace falta para volver a cargar los
+   datos iniciales en Firebase.
+
+--------------------------------------------------------------------
+8. REGISTRO (comprobarRegistro, despues de comprobar los campos)
+--------------------------------------------------------------------
+
+ 6. Sin servidor -> "No hay conexión con el servidor. Inténtalo más
+    tarde" (sin servidor no se puede crear una cuenta).
+ 7. cliente.existeEmail(email) -> "Ese email ya está registrado".
+    (Antes salia "Cuenta creada" aunque el email ya existiera.)
+ Despues cliente.registrarUsuario(...): si devuelve false -> "No se ha
+ podido crear la cuenta". Si devuelve true -> "Cuenta creada".
+
+--------------------------------------------------------------------
+9. ERRORES CONTROLADOS
+--------------------------------------------------------------------
+
+ - Servidor apagado: connect() falla enseguida -> enviar() devuelve
+   null -> los metodos devuelven null / false / lista vacia y la
+   aplicacion sigue (modo sin conexion o mensaje de error).
+ - Servidor que no contesta: setSoTimeout(60 s) -> igual que apagado.
+ - Puerto ocupado al arrancar el servidor (ya habia uno abierto):
+   "Error en el servidor: Address already in use".
+ - Sin credenciales de Firebase: el servidor no arranca y lo dice.
+ - Peticion mal hecha: {"ok":false,"mensaje":"Petición incorrecta"}.

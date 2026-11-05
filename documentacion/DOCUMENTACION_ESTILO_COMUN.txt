@@ -1,0 +1,99 @@
+====================================================================
+  GYMAPP - ESTILO COMUN DE BOTONES Y CAMPOS (todas las ventanas)
+  (solo puntos clave)
+====================================================================
+
+Que es: las reglas para que todos los botones y campos de texto de la
+aplicacion se vean igual. Los valores estan en vista/Estilos.java, asi
+si se quiere cambiar algo (por ejemplo el redondeo) se cambia en un
+solo sitio y cambia en todas las ventanas.
+
+--------------------------------------------------------------------
+1. VALORES COMUNES (vista/Estilos.java)
+--------------------------------------------------------------------
+
+ - ARCO_BOTON = 8 .................. redondeo de las esquinas de TODOS
+                                     los botones y campos de texto
+ - COLOR_BOTON_OSCURO (23,21,22) ... botones negros (GUARDAR, CONTINUAR,
+                                     ATRÁS, INICIAR, SALIR del aviso)
+ - COLOR_BOTON_OSCURO_HOVER (60,60,60) -> el negro con el raton encima
+ - COLOR_ERROR (208,0,0) / COLOR_ERROR_HOVER (150,0,0) -> botones rojos
+   (ELIMINAR CUENTA en Ajustes y ELIMINAR del aviso), con el raton encima
+   el rojo mas oscuro
+ - COLOR_BOTON_CLARO (blanco) y COLOR_BOTON_CLARO_HOVER (215,215,215)
+                                  -> botones blancos y su color con el
+                                     raton encima
+ - FUENTE_BOTON (JetBrains Mono 17) -> texto de los botones de abajo de
+                                     las ventanas
+
+--------------------------------------------------------------------
+2. COMO SON LOS BOTONES
+--------------------------------------------------------------------
+
+Cada ventana tiene su clase de boton dentro (BotonRedondo,
+BotonRedondeado, BotonPlano, BotonDialogo, BotonVolver, BotonClaro),
+pero todas pintan lo mismo en paintComponent:
+
+ - Negro: fillRoundRect con COLOR_BOTON_OSCURO (o el HOVER si el raton
+   esta encima: getModel().isRollover()).
+ - Blanco con borde: fillRoundRect blanco (o gris claro con el raton
+   encima) y encima drawRoundRect negro con BasicStroke(1.5f), que es
+   una linea de 1.5 px.
+ - Blanco sin borde (dentro de la caja negra del login y del registro):
+   solo fillRoundRect blanco.
+ - Siempre con Estilos.ARCO_BOTON en las esquinas.
+
+Excepciones a proposito:
+ - "Ver video" del detalle: esquinas mas redondas (24) porque es una
+   tarjeta grande con icono, no un boton normal.
+ - Boton grande de Workout en curso: cambia de color (amarillo en PAUSA,
+   verde en SIGUIENTE). Con el raton encima se oscurece (darker()),
+   menos el negro, que se pone COLOR_BOTON_OSCURO_HOVER (el negro no se
+   puede oscurecer mas y no se notaba).
+
+--------------------------------------------------------------------
+3. CAMPOS DE TEXTO (vista/BordeRedondeado.java)
+--------------------------------------------------------------------
+
+ - Login, Registro y Ajustes usan new BordeRedondeado(color, grosor):
+   un borde con las mismas esquinas que los botones.
+     Login y Registro: blanco de 3 px (rojo si hay error)
+     Ajustes:          negro de 2 px (rojo si hay error)
+ - BordeRedondeado extiende AbstractBorder y tiene 2 metodos:
+     paintBorder()     -> pinta drawRoundRect con BasicStroke(grosor)
+     getBorderInsets() -> el espacio del borde + 8 px de margen para que
+                          el texto no toque la linea
+ - Antes se usaba BorderFactory.createLineBorder, que solo hace esquinas
+   rectas (o casi rectas con el "true").
+
+--------------------------------------------------------------------
+4. TEXTOS
+--------------------------------------------------------------------
+
+ - Los textos que se ven en pantalla llevan tilde: "Duración" (columnas
+   de Workouts y Detalle), "ATRÁS" (boton de Workouts).
+ - En el codigo (nombres de variables y comentarios) no se usan tildes.
+
+--------------------------------------------------------------------
+5. CAMBIOS HECHOS PARA IGUALARLO TODO (25/10/2026)
+--------------------------------------------------------------------
+
+ - Login (REGISTRAR, entrar) y Registro (VOLVER, CREAR CUENTA): los
+   botones eran rectos -> ahora redondeados. Campos: rectos -> redondeados.
+ - Workouts (ATRÁS, VER WORKOUT): botones rectos con texto de 13 ->
+   redondeados, borde de 1.5 px y texto de 17. ATRÁS pasa de 111 a 140
+   de ancho para que quepa el texto.
+ - Ajustes: GUARDAR era negro puro -> mismo negro que el resto. SALIR
+   tenia borde de 2 px -> 1.5 px como el resto. Texto 15 -> 17.
+ - Detalle, Workout en curso, Resumen y el aviso de salir: tenian sus
+   propias copias de los colores, la fuente y el redondeo -> ahora usan
+   las de Estilos (se ven igual que antes).
+ - Workout en curso: INICIAR / REANUDAR no cambiaban con el raton encima
+   -> ahora se ponen gris oscuro como los demas botones negros.
+
+Sin cambiar (se pueden mirar mas adelante):
+ - El desplegable TODOS de Workouts sigue con esquinas rectas.
+ - Hay botones en mayusculas (SALIR, CONTINUAR, ATRÁS) y otros no
+   ("Volver" en Detalle y Resumen, "Ver video").
+ - El logo de la caja del login/registro (logo_blanco.png, 44x22) tiene
+   otra forma que el de las cabeceras (logo_negro.png, 32x16).

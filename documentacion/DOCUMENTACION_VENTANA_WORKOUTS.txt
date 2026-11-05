@@ -1,0 +1,105 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA WORKOUTS (VentanaWorkouts)
+  (solo puntos clave)
+====================================================================
+
+Que es: la lista de workouts que sale al pulsar WORKOUTS en la home.
+Por defecto enseña los workouts del nivel del usuario y de los niveles
+inferiores. Un desplegable filtra por un nivel concreto. VER WORKOUT
+abre el detalle del workout elegido y ATRÁS vuelve a la home.
+HISTÓRICO abre el historico del usuario (su VOLVER vuelve aqui).
+
+Enunciado: "Dicho listado mostrará por defecto los workouts
+correspondientes a su nivel y los workouts de los niveles inferiores"
+y "el usuario dispone de un filtro que le muestra todos los workouts
+de un nivel en concreto".
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/
+ |-- workouts_background.jpg -> fondo 900x600 (blanco con las rayas
+ |                              negras arriba a la derecha)
+ |-- iconos/
+      |-- logo_negro.png (32x16)
+      |-- nivel_novato.png ... nivel_experto.png (16x16) -> columna Nivel
+      |-- play_negro.png (26x26)                         -> columna Vídeo
+
+src/
+ |-- vista/VentanaWorkouts.java     -> la ventana
+ |-- vista/EtiquetaUsuario.java     -> nombre y nivel del usuario
+ |-- controlador/GestionVistas.java -> abrirWorkouts() y
+                                       mostrarWorkoutsFiltrados()
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600.
+ - Logo + "GymApp" ............ (24,14), igual que la home
+ - Titulo "Workouts" .......... centrado, y=84, negrita 56
+ - Desplegable del filtro ..... (51,180) 210x38
+ - "Sin conexión: ..." ........ (281,180), solo en modo sin conexion
+                                 (sin servidor: backup, o admin/admin)
+ - Usuario (EtiquetaUsuario) .. (561,188) 288x24, pegado a la derecha
+ - Tabla ...................... (51,232) 798x286, filas de 52 px
+ - ATRÁS ...................... (25,536) 140x48
+ - HISTÓRICO .................. (486,536) 180x48, blanco con borde
+ - VER WORKOUT ................ (681,536) 185x48
+
+Columnas (anchos): Nombre 280, Nivel 200, Ejercicios 130,
+Duración 108, Vídeo 80.
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Tabla: JTable con un DefaultTableModel que no deja editar. Cabecera
+   negra, filas blanco/gris y la fila elegida con borde negro
+   (RenderCelda y RenderCabecera, dentro de la ventana).
+ - Columna Nivel: icono + texto del color del nivel.
+ - Columna Vídeo: si el controlador pone VentanaWorkouts.CON_VIDEO sale
+   el icono de play centrado; si pone "" la celda queda vacia. El
+   enunciado lo pide: "La información que se muestra de un workout
+   consiste en su nombre, el número de ejercicios, nivel y video
+   informativo (una URL)". El video se abre desde el detalle.
+ - Usuario: EtiquetaUsuario (clase comun de la vista) con
+   "Alexis · Nivel [icono] Intermedio". La rubrica ADT pide mostrar la
+   informacion "así como del cliente, especialmente su nivel".
+ - Desplegable oscuro (ComboOscuroUI) y barra de scroll fina
+   (ScrollFinoUI), dibujados dentro de la ventana.
+ - Botones ATRÁS y VER WORKOUT redondeados (ver
+   DOCUMENTACION_ESTILO_COMUN.txt). VER WORKOUT empieza desactivado
+   hasta que se elige una fila.
+
+--------------------------------------------------------------------
+4. METODOS PARA EL CONTROLADOR
+--------------------------------------------------------------------
+
+ - setUsuario("Alexis", 2, "Intermedio")
+ - setOpcionesNivel({ "TODOS", "NOVATO", "PRINCIPIANTE", ... })
+ - cargarWorkouts(filas) -> cada fila:
+       { nombre, nivel, ejercicios, duracion, video }
+   Si no hay filas sale "No hay workouts para este nivel".
+ - setModoSinConexion(true/false)
+ - getFilaSeleccionada() (-1 si no hay)
+ - getComboNivel(), getTabla(), getBtnAtras(), getBtnVerWorkout(),
+   cerrar()
+
+En GestionVistas:
+ - abrirWorkouts(): pone el usuario, las opciones del filtro (TODOS y
+   un nivel por cada uno hasta el del usuario) y los listeners.
+ - mostrarWorkoutsFiltrados(): TODOS = nivel del workout <= nivel del
+   usuario. Un nivel = solo los de ese nivel. Rellena las filas con
+   calcularDuracionWorkout() (series + descansos) y CON_VIDEO si
+   workout.getVideoURL() no esta vacio.
+
+--------------------------------------------------------------------
+5. PENDIENTE
+--------------------------------------------------------------------
+
+ - Rubrica ADT: "Se puede acceder a la pantalla de Históricos" desde
+   Workouts (falta la pantalla Historico).
+ - Rubrica ADT: "Volver: Se puede regresar a la pantalla de Login".
+   Ahora ATRÁS va a la home y desde ahi se cierra sesion.

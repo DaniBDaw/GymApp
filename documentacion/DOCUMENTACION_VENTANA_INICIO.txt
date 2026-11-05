@@ -1,0 +1,234 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA DE INICIO (VentanaInicio)
+====================================================================
+
+Que es: la primera pantalla de la aplicacion (pantalla de bienvenida).
+Muestra la imagen de fondo con el logo de GymApp, la fecha de hoy
+arriba y un texto que parpadea abajo. Al pulsar una tecla o hacer
+clic se pasa a la siguiente ventana.
+
+--------------------------------------------------------------------
+1. FICHEROS Y DONDE ESTAN
+--------------------------------------------------------------------
+
+MVC estricto: dentro de src solo hay los paquetes modelo, vista y
+controlador. Las imagenes y la fuente NO estan en src (si estuvieran,
+Eclipse las mostraria como paquetes): estan en carpetas normales en la
+raiz del proyecto.
+
+GymApp/
+ |-- images/                                -> carpeta normal (no es paquete)
+ |    |-- panel_inicio.jpg                  -> imagen de fondo (900x600)
+ |    |-- logo.png                          -> logo original (190x96), de
+ |    |                                       aqui salen los iconos
+ |    |-- iconos/                           -> todos los iconos en PNG
+ |         |-- icono_app.png  (64x64)          (icono de la ventana)
+ |         |-- cursor.png     (32x32)          (cursor propio)
+ |         |-- ...            (los de login y home, ver sus documentaciones)
+ |-- fonts/                                 -> carpeta normal (no es paquete)
+ |    |-- JetBrainsMono-Regular.ttf         -> fuente de los textos pequenos
+ |-- src/
+      |-- module-info.java                  -> tiene "requires java.desktop;"
+      |-- modelo/                           -> (de los companeros)
+      |-- vista/
+      |    |-- Estilos.java                 -> colores, fuentes, icono y cursor comunes
+      |    |-- PanelFondo.java              -> panel con la imagen de fondo
+      |    |-- UtilidadesVista.java         -> cargarImagen() y obtenerFechaHoy()
+      |    |-- EtiquetaUsuario.java         -> nombre + nivel del usuario (Workouts,
+      |    |                                   Detalle y Workout en curso)
+      |    |-- BordeRedondeado.java         -> borde redondeado de los campos
+      |                                        (ver DOCUMENTACION_ESTILO_COMUN.txt)
+      |    |-- VentanaInicio.java           -> la ventana de inicio
+      |-- controlador/
+           |-- PruebaVistas.java            -> main() para probar las ventanas
+                                               (controlador de prueba)
+
+NOTA: al hacer la ventana de login, PanelFondo y la fecha se sacaron de
+VentanaInicio a sus propias clases para que las usen todas las ventanas.
+Funcionan exactamente igual que se explica aqui.
+
+IMPORTANTE: module-info.java necesita la linea "requires java.desktop;".
+Sin ella Swing no compila (errores "java.awt.Color is not accessible").
+
+--------------------------------------------------------------------
+2. IMAGEN DE FONDO
+--------------------------------------------------------------------
+
+Donde: PanelFondo.java (clase propia, la usan todas las ventanas)
+
+Como:
+ - PanelFondo es un JPanel que sobrescribe paintComponent() y dibuja la
+   imagen con g.drawImage(imagenFondo, 0, 0, this). No se estira.
+ - El tamano del panel es el de la imagen (setPreferredSize con el
+   ancho y alto de la imagen). Luego en el constructor de la ventana
+   se llama a pack(), asi la ventana mide exactamente lo mismo que la
+   imagen (900x600).
+ - setResizable(false) -> no se puede cambiar el tamano.
+ - setLocationRelativeTo(null) -> la ventana sale centrada.
+
+Como se carga la imagen (UtilidadesVista.cargarImagen):
+ - La ruta es relativa a la carpeta del proyecto: "images/panel_inicio.jpg".
+   (Eclipse ejecuta el programa desde la carpeta del proyecto.)
+ - Si new File(ruta).exists() es false, escribe "No se ha encontrado la
+   imagen: ..." en la consola y devuelve null. Si no, new ImageIcon(ruta).
+ - Si no encuentra el fondo, sale un fondo blanco de 900x600 (no da error).
+
+--------------------------------------------------------------------
+3. FECHA DE HOY ARRIBA (ej: "17 de octubre")
+--------------------------------------------------------------------
+
+Donde: VentanaInicio.java -> metodo crearFecha()
+       UtilidadesVista.java -> metodo obtenerFechaHoy() y los dos arrays
+
+Como:
+ - Hay dos arrays, uno con los nombres de los meses y otro con su numero,
+   en la misma posicion:
+
+     NOMBRES_MESES = { "enero", "febrero", ..., "diciembre" }
+     NUMEROS_MESES = {    1,        2,     ...,      12     }
+
+ - obtenerFechaHoy():
+     1. LocalDate.now() da la fecha de hoy.
+     2. getDayOfMonth() da el dia (17) y getMonthValue() el mes (10).
+     3. Con un for se recorre NUMEROS_MESES. Cuando el numero coincide
+        con el mes de hoy, se coge el nombre de la misma posicion en
+        NOMBRES_MESES ("octubre").
+     4. Devuelve dia + " de " + nombreMes -> "17 de octubre".
+ - crearFecha() crea un JLabel con ese texto, centrado, en la parte de
+   arriba (setBounds(0, 40, anchoVentana, 24)).
+ - Se actualiza sola: cada vez que se abre la ventana se calcula la
+   fecha de ese dia.
+
+--------------------------------------------------------------------
+4. TEXTO QUE PARPADEA ABAJO
+   ("Pulsa cualquier tecla o haz clic para continuar")
+--------------------------------------------------------------------
+
+Donde: VentanaInicio.java -> metodo crearTextoPulsar()
+
+Como:
+ - Es un JLabel centrado, colocado 110 pixeles por encima del borde de
+   abajo (setBounds(0, alto - 110, ancho, 24)).
+ - El parpadeo se hace con un javax.swing.Timer:
+     * Cada 700 ms (constante TIEMPO_PARPADEO) se ejecuta actionPerformed().
+     * Dentro se cambia la visibilidad del texto:
+           lblPulsar.setVisible(!lblPulsar.isVisible());
+       Si esta visible lo oculta y si esta oculto lo muestra.
+     * Se usa una clase anonima "new ActionListener() { ... }" (sin lambdas).
+ - El metodo cerrar() para el Timer (timerParpadeo.stop()) y cierra la
+   ventana (dispose()). Hay que usar cerrar() y no dispose() directamente,
+   para que el Timer no se quede funcionando.
+
+Pasar a la siguiente ventana (tecla o clic):
+ - La vista NO tiene esa logica (MVC). La pone el controlador anadiendo
+   un KeyListener y un MouseListener a la ventana.
+ - Ahora mismo lo hace PruebaVistas.java como "controlador de prueba":
+   en keyPressed() y mouseClicked() llama a irALogin(), que hace
+   ventanaInicio.cerrar() y abre la ventana de login.
+
+--------------------------------------------------------------------
+5. FUENTE JETBRAINS MONO (textos pequenos)
+--------------------------------------------------------------------
+
+Donde: Estilos.java -> constante FUENTE_MONO y metodo cargarFuenteMono()
+
+Como:
+ - JetBrains Mono no viene instalada en Windows, asi que el fichero
+   .ttf esta dentro del proyecto (fonts/JetBrainsMono-Regular.ttf).
+   Asi funciona en cualquier ordenador sin instalar nada.
+   (Es gratuita, licencia OFL, descargada del GitHub oficial de JetBrains).
+ - cargarFuenteMono() dentro de un try/catch:
+     1. Font.createFont(Font.TRUETYPE_FONT, new File("fonts/...ttf"))
+        crea la fuente a partir del fichero.
+     2. deriveFont(...) le da tamano 15.
+ - Si algo falla (catch) usa la fuente "Monospaced" de Java (no da error).
+ - La usan la fecha y el texto que parpadea: setFont(Estilos.FUENTE_MONO).
+
+El resto de textos usan "Segoe UI" (o "Arial" si no esta instalada),
+elegida en elegirFamiliaFuente() recorriendo las fuentes del sistema.
+
+--------------------------------------------------------------------
+6. ICONO DE LA APLICACION (en vez del icono de Java)
+--------------------------------------------------------------------
+
+Donde: Estilos.java -> constante ICONO_APP y metodo cargarIconoApp()
+       VentanaInicio.java -> constructor, setIconImage(...)
+
+Como:
+ - El icono es la imagen images/iconos/icono_app.png (64x64): el
+   logo centrado sobre un cuadrado blanco con las esquinas redondeadas.
+   (El logo original no es cuadrado y Java lo aplastaria; ademas el fondo
+   blanco hace que se vea en una barra de tareas oscura.)
+ - cargarIconoApp() la carga con UtilidadesVista.cargarImagen() y
+   devuelve getImage().
+ - En el constructor de la ventana:
+
+       if (Estilos.ICONO_APP != null) {
+           setIconImage(Estilos.ICONO_APP);
+       }
+
+   Sale en la barra de titulo y en la barra de tareas.
+ - Si no encuentra la imagen devuelve null y se queda el icono de Java
+   (no da error).
+ - TODAS las ventanas nuevas tienen que poner esas 3 lineas.
+
+--------------------------------------------------------------------
+7. CURSOR PROPIO (triangulo negro redondeado)
+--------------------------------------------------------------------
+
+Donde: Estilos.java -> constante CURSOR_APP y metodo crearCursorApp()
+       VentanaInicio.java -> constructor, setCursor(...)
+
+Como:
+ - El cursor es la imagen images/iconos/cursor.png (32x32, el tamano
+   que usa Windows para los cursores): un triangulo negro con la punta
+   arriba a la izquierda y un borde blanco para que se vea encima de las
+   partes negras.
+ - crearCursorApp() la carga y la convierte en cursor con:
+       Toolkit.getDefaultToolkit().createCustomCursor(imagen, new Point(3, 3), "CursorGymApp")
+   El Point (3, 3) es el pixel exacto de la imagen donde se hace el clic
+   (la punta del triangulo).
+ - Si no encuentra la imagen, se usa el cursor normal (no da error).
+ - En el constructor de la ventana:
+
+       setCursor(Estilos.CURSOR_APP);
+
+   Todos los componentes de la ventana lo heredan. TODAS las ventanas
+   nuevas tienen que poner esa linea.
+ - Para cambiar el cursor basta con cambiar la imagen cursor.png.
+
+--------------------------------------------------------------------
+8. COMO PROBARLA
+--------------------------------------------------------------------
+
+Eclipse: clic derecho en controlador/PruebaVistas.java -> Run As -> Java Application
+Se abre la ventana. Al pulsar una tecla o hacer clic se cierra y se
+abre la ventana de login (ver DOCUMENTACION_VENTANA_LOGIN.txt).
+
+--------------------------------------------------------------------
+9. COMO PASARLA AL PROYECTO REAL
+--------------------------------------------------------------------
+
+Copiar (mismas posiciones en el proyecto real):
+ - src/vista/       -> todas las clases de la vista (paquete "vista")
+ - src/controlador/PruebaVistas.java -> si se quiere seguir probando
+ - images/          -> en la RAIZ del proyecto (al lado de src, no dentro)
+ - fonts/           -> en la RAIZ del proyecto (al lado de src, no dentro)
+
+Comprobar que el module-info.java del proyecto real tiene
+"requires java.desktop;".
+
+La vista no usa nada de modelo ni controlador, asi que no choca con el
+codigo de los companeros.
+
+--------------------------------------------------------------------
+REGLAS DE ESTILO QUE SEGUIMOS
+--------------------------------------------------------------------
+ - Solo Java Swing, sin librerias externas.
+ - Sin lambdas, sin streams, sin var, sin records.
+ - Nombres y comentarios en espanol.
+ - La vista no tiene logica: el controlador anade los listeners.
+ - Colores y fuentes comunes en Estilos.java para reutilizarlos.
+ - Codigo sencillo que podamos explicar en la defensa: los iconos son
+   imagenes PNG (no se dibujan con codigo) y las posiciones son fijas
+   con setBounds.

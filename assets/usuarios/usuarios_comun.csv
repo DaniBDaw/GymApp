@@ -1,0 +1,61 @@
+usuarioId,fechaNacimiento,nivel,nombre,apellidos,correo,password
+1,1969-06-17,4,Carlos,Rodríguez Iglesias,c@mail.com,1234567
+2,2003-02-08,3,Ana,Gómez,ana@mail.com,1719583
+3,2001-09-14,3,Luis,Castro Martínez,luis@mail.com,9906820
+4,1997-12-25,3,Maria,Rodríguez,maria@mail.com,1571945
+5,1999-08-08,0,Javier,Ortega,javier@mail.com,0445199
+6,1967-02-10,3,Elena,Castillo Del Valle,elena@mail.com,9142600
+7,1990-01-27,3,Sofia,Blanco,sofia@mail.com,9886237
+8,1993-11-11,1,Diego,García,diego@mail.com,2678638
+9,1978-06-12,3,Laura,Torres Romero,laura@mail.com,2608513
+10,1994-11-03,2,Pablo,Medina,pablo@mail.com,5647119
+11,1967-09-18,1,Lucia,Ramos,lucia@mail.com,1622631
+12,1991-03-21,2,Mateo,Domínguez,mateo@mail.com,4437923
+13,1998-05-01,3,Carmen,Santos Molina,carmen@mail.com,8996414
+14,1985-06-15,1,Alejandro,Ramos,alejandro@mail.com,1322047
+15,1987-10-18,2,Marta,De la Cruz Núñez,marta@mail.com,6067228
+16,1969-07-17,3,Daniel,Castillo López,daniel@mail.com,0768805
+17,2000-08-13,4,Paula,Vega Alonso,paula@mail.com,1338687
+18,1978-07-19,4,David,Sánchez Ramos,david@mail.com,4663623
+19,1992-09-17,3,Sara,Vázquez,sara@mail.com,2728882
+20,1998-04-25,0,Manuel,Díaz,manuel@mail.com,4479144
+21,1965-12-17,3,Alba,De la Rosa Del Valle,alba@mail.com,1197935
+22,1968-12-20,1,Hugo,Jiménez Castro,hugo@mail.com,4107245
+23,1971-08-08,3,Irene,Ramos,irene@mail.com,4528972
+24,1969-11-23,1,Adrian,De la Cruz Montes,adrian@mail.com,9344066
+25,1992-12-18,1,Claudia,Navarro,claudia@mail.com,0938483
+26,1987-11-10,2,Alvaro,González,alvaro@mail.com,5292423
+27,2003-09-23,2,Valeria,López,valeria@mail.com,3539704
+28,1987-07-07,1,Gonzalo,Rubio Castillo,gonzalo@mail.com,5279418
+29,1979-01-02,0,Rocio,Suárez,rocio@mail.com,6637601
+30,2000-08-26,2,Fernando,Del Valle Molina,fernando@mail.com,2396987
+31,1993-06-07,1,Beatriz,Muñoz,beatriz@mail.com,9418194
+32,1993-08-17,3,Jorge,Iglesias Marín,jorge@mail.com,7187926
+33,1993-07-18,2,Alicia,Gil Vázquez,alicia@mail.com,3679591
+34,1964-05-11,1,Ramon,Gómez Ortega,ramon@mail.com,8279821
+35,1968-08-23,2,Patricia,Fernández,patricia@mail.com,1839607
+36,1994-05-15,4,Sergio,Jiménez,sergio@mail.com,7082668
+37,1973-07-27,2,Andrea,Ramos Ramos,andrea@mail.com,9997348
+38,1966-11-09,4,Enrique,Delgado Álvarez,enrique@mail.com,9281590
+39,1985-02-07,3,Cristina,García De la Rosa,cristina@mail.com,1921859
+40,1988-03-15,4,Raul,Castro Medina,raul@mail.com,4476583
+41,1967-01-15,2,Natalia,Torres Pérez,natalia@mail.com,4924115
+42,1967-10-26,1,Victor,Molina,victor@mail.com,0054447
+43,1969-10-02,3,Silvia,Santos Álvarez,silvia@mail.com,8398441
+44,1979-11-25,2,Marcos,Ortega Sánchez,marcos@mail.com,5007072
+45,1971-01-11,2,Ines,Ortega Sanz,ines@mail.com,3337174
+46,1998-08-23,2,Guillermo,Medina,guillermo@mail.com,2710343
+47,1970-09-08,2,Pilar,Vega Delgado,pilar@mail.com,0009594
+48,1970-10-23,2,Joaquin,Suárez Rodríguez,joaquin@mail.com,1876828
+49,1967-07-22,0,Teresa,Gutiérrez Muñoz,teresa@mail.com,0971823
+50,1970-10-10,2,Francisco,Rubio,francisco@mail.com,1321324
+51,1986-03-17,3,Isabel,Suárez,isabel@mail.com,1161193
+52,1986-01-04,1,Ignacio,Castro Vega,ignacio@mail.com,2109911
+53,1966-01-27,1,Miriam,Morales,miriam@mail.com,9224173
+54,1984-01-01,2,Esteban,Delgado,esteban@mail.com,7099076
+55,1982-11-10,1,Rosa,Castro Medina,rosa@mail.com,3374754
+56,1969-08-15,2,Alberto,Gil San Martín,alberto@mail.com,6264956
+57,1972-03-19,2,Lorena,Delgado,lorena@mail.com,7574680
+58,1989-10-11,1,Gabriel,Moreno,gabriel@mail.com,1074176
+59,1976-11-23,0,Victoria,Marín,victoria@mail.com,9293261
+60,1987-01-07,2,Rafael,Moreno,rafael@mail.com,0120642

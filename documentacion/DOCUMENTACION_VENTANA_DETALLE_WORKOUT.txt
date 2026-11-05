@@ -1,0 +1,129 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA DETALLE WORKOUT
+  (VentanaDetalleWorkout) (solo puntos clave)
+====================================================================
+
+Que es: la ventana que sale al elegir un workout en la lista de
+Workouts y pulsar VER WORKOUT. Muestra el nombre, el nivel, la
+duracion estimada, un boton para ver el video y la tabla con los
+ejercicios. Abajo: el siguiente ejercicio, VOLVER y CONTINUAR.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/   (en la raiz del proyecto, no en src)
+ |-- panel_detalle_workout.jpg     -> solo es el DISENO de referencia
+ |                                     (900x600, no se usa en el codigo)
+ |-- detalle_workout_bg.jpg        -> fondo (900x600, blanco con el
+ |                                     dibujo negro de arriba)
+ |-- iconos/
+      |-- logo_negro.png (32x16)
+      |-- nivel_novato.png ... nivel_experto.png (16x16)
+      |-- tiempo.png (16x16)
+      |-- play_negro.png (26x26)       -> boton "Ver video"
+      |-- play_blanco.png (20x20)      -> boton CONTINUAR
+      |-- estado_hecho.png (22x22)     -> circulo verde con check
+      |-- estado_pendiente.png (22x22) -> circulo gris con "..."
+
+src/
+ |-- vista/VentanaDetalleWorkout.java  -> la ventana
+ |-- vista/EtiquetaUsuario.java        -> nombre y nivel del usuario
+ |-- controlador/GestionVistas.java    -> abrirDetalleWorkout(workout)
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600 (el tamano del fondo).
+
+ - Logo + "GymApp" ............ (24,14) igual que home y workouts
+ - Usuario (EtiquetaUsuario) ... (560,16) 290x24, pegado a la derecha
+ - Titulo (nombre workout) .... (44,98)  590x60
+ - Nivel (icono + texto) ...... (48,162) / (71,158)
+ - Duracion (icono + texto) ... (48,187) / (71,183)
+ - Linea gris ................. (46,223) 805x1
+ - Boton Ver video ............ (661,109) 189x97
+ - Tabla ...................... (54,245) 797x260
+                                (cabecera 52 + 4 filas de 52)
+ - "● Siguiente: ..." ......... (55,520)
+ - Boton VOLVER ............... (516,525) 121x46
+ - Boton CONTINUAR ............ (661,525) 189x46
+
+Columnas de la tabla (anchos): N° 108, Ejercicio 278, Series 88,
+Descanso 118, Duración 110, Estado 95. Desde Series el texto va
+centrado.
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Titulo: Segoe UI negrita 44. Si el nombre tiene mas de 16 letras
+   se usa tamano 32, para que no choque con el dibujo negro del fondo
+   (ej: "Fuerza total avanzado").
+ - Nivel: dos JLabel, "Nivel" normal y "2 - Intermedio" en negrita,
+   los dos del color del nivel (los colores estan en Estilos). El
+   icono se elige con el nombre: "nivel_" + nombre + ".png".
+ - Tabla: JTable con cabecera negra y filas blanco/gris (igual que la
+   de Workouts). No se pueden seleccionar filas, solo informa.
+   La columna Estado no tiene texto: si el valor es "hecho" pone el
+   icono verde, si no el gris.
+ - Si hay mas de 4 ejercicios las filas se hacen mas bajas para que
+   quepan todas (alto = espacio de la tabla / numero de filas). Asi
+   no hace falta barra de scroll. Con 5 ejercicios quedan de 41 px.
+ - Botones: clase BotonRedondo (dentro de la ventana). Pinta un
+   rectangulo con las esquinas redondeadas (fillRoundRect): negro o
+   blanco con borde negro. Con el raton encima se pone gris. Colores,
+   fuente y redondeo salen de Estilos (ver DOCUMENTACION_ESTILO_COMUN.txt).
+ - Los iconos (check, "...", play) son PNG, no se dibujan en codigo.
+
+--------------------------------------------------------------------
+4. METODOS PARA EL CONTROLADOR
+--------------------------------------------------------------------
+
+ - setUsuario("Alexis", 2, "Intermedio") -> nombre y nivel del usuario
+   arriba a la derecha (rubrica ADT: "así como del cliente,
+   especialmente su nivel")
+ - setTitulo("Core express")
+ - setNivel(2, "Intermedio")        -> "Nivel 2 - Intermedio"
+ - setDuracion("12:00", 4)          -> "Duración estimada: 12:00 - 4 Ejercicios"
+ - cargarEjercicios(filas)          -> cada fila:
+       { "1", "Plancha lateral", "3", "20 s", "03:00", "pendiente" }
+   (el estado es VentanaDetalleWorkout.ESTADO_HECHO o ESTADO_PENDIENTE)
+ - setSiguiente("2 - Crunch bicicleta")
+   setSiguiente(null) -> "Todos los ejercicios completados" y
+   CONTINUAR se desactiva
+ - getBtnVerVideo(), getBtnVolver(), getBtnContinuar(), cerrar()
+
+En GestionVistas (abrirDetalleWorkout):
+ - Duracion de un ejercicio: calcularDuracionEjercicio() = tiempo de
+   cada serie + el descanso del ejercicio por cada serie.
+   La del workout (calcularDuracionWorkout) es la suma de la de sus
+   ejercicios, asi coincide con la columna Duracion de Workouts.
+ - formatearMinutosSegundos(): 720 -> "12:00".
+ - Ver video: abre workout.getVideoURL() en el navegador con
+   Desktop.getDesktop().browse(...). Si no hay URL el boton sale
+   desactivado.
+ - VOLVER: abre otra vez la lista de Workouts y cierra el detalle.
+ - CONTINUAR: abre VentanaWorkoutEnCurso (ver su documentacion).
+
+--------------------------------------------------------------------
+5. CAMBIOS RESPECTO AL DISENO
+--------------------------------------------------------------------
+
+ - La cabecera de la tabla tiene las esquinas rectas (en el diseño
+   son redondeadas arriba).
+ - El titulo usa Segoe UI (la misma fuente que el resto de la app),
+   no la fuente redondeada del diseño.
+ - Los colores del nivel son los de Estilos (los mismos que en la home
+   y en Workouts), no el amarillo exacto del diseño.
+
+--------------------------------------------------------------------
+6. PENDIENTE
+--------------------------------------------------------------------
+
+ - Estado de cada ejercicio: todavia no se guarda en ningun sitio que
+   ejercicios ha hecho el usuario, asi que todos salen pendientes y
+   el "Siguiente" siempre es el 1. Cuando exista la ventana de
+   Ejercicios, el controlador tendra que pasar "hecho" en los que ya
+   estan hechos y el primero pendiente en setSiguiente().

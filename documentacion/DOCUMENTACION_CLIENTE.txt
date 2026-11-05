@@ -1,0 +1,172 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE Cliente.java
+  (controlador: parte "Cliente" de la arquitectura Cliente-Servidor)
+====================================================================
+
+Que es: la unica puerta de la aplicacion hacia Firebase y hacia los
+ficheros. Las ventanas (a traves de GestionVistas) NO hablan con
+GestionBD ni con GestorFicheros: le piden los datos a Cliente.
+
+Cliente NO toca Firebase ni los ficheros. Lo unico que hace es:
+   1. montar una peticion JSON con el campo "accion",
+   2. mandarla por un Socket TCP al Servidor,
+   3. leer la respuesta JSON y convertirla en objetos del modelo
+      (Usuario, Workout, Historico...).
+
+El que de verdad trabaja con Firebase y los ficheros es Servidor.java
+(ver DOCUMENTACION_SERVIDOR.txt).
+
+--------------------------------------------------------------------
+1. COMO SE USA
+--------------------------------------------------------------------
+
+ - Antes hay que arrancar el main de Servidor (si no, no hay a quien
+   conectarse).
+ - GestionVistas tiene un unico objeto: "private static Cliente
+   cliente = new Cliente();" y llama a sus metodos
+   (cliente.validarLogin(...), cliente.obtenerWorkouts()...).
+ - InicioApp crea otro Cliente y le pide obtenerListadoUsuarios() al
+   arrancar (el servidor genera el backup usuarios.dat).
+ - Los metodos tienen los mismos nombres y devuelven lo mismo que los de
+   GestionBD / GestorFicheros.
+
+--------------------------------------------------------------------
+2. CONSTRUCTORES Y CONSTANTES
+--------------------------------------------------------------------
+
+ - Cliente()                    -> se conecta a localhost:5000.
+ - Cliente(String host, int puerto) -> para otro equipo u otro puerto.
+
+ Constantes:
+   HOST_POR_DEFECTO     "localhost"
+   PUERTO_POR_DEFECTO   5000 (el mismo que usa el Servidor)
+   TIEMPO_CONEXION      3000 ms maximo para conectar con el servidor
+   TIEMPO_RESPUESTA     30000 ms maximo esperando una respuesta
+                        (Firebase puede tardar)
+   ADMIN_USUARIO / ADMIN_PASSWORD   "admin" / "admin"
+
+--------------------------------------------------------------------
+3. ATRIBUTOS
+--------------------------------------------------------------------
+
+ - host, puerto  : donde esta el servidor.
+ - gson          : Gson con un adaptador para LocalDate (la fecha viaja
+                   como texto "2001-09-14").
+ - socket, entrada (BufferedReader), salida (PrintWriter): la
+   conexion, en UTF-8. Hay UN solo Socket que se reutiliza.
+ - ultimoMensaje : mensaje de la ultima respuesta del servidor (por
+   ejemplo "Ya existe un usuario con ese email" o "Sin conexión con el
+   servidor"). Se lee con getUltimoMensaje().
+
+--------------------------------------------------------------------
+4. CONEXION
+--------------------------------------------------------------------
+
+ - conectar()      Cierra lo anterior y abre un Socket nuevo. Devuelve
+                   false si no se puede (servidor apagado, etc.).
+ - hayConexion()   true si ya hay un socket abierto o si consigue
+                   conectar. Sirve para decidir el modo sin conexion.
+ - cerrar()        Cierra el socket y deja todo a null.
+ - getUltimoMensaje()  Texto de la ultima respuesta (para mostrarlo en
+                   la vista).
+
+ Los metodos de conexion y de envio son "synchronized": si varios hilos
+ (por ejemplo el hilo de carga y la ventana) usan el Cliente a la vez,
+ las peticiones no se mezclan en el mismo socket.
+
+--------------------------------------------------------------------
+5. COMO SE ENVIA UNA PETICION (metodos privados)
+--------------------------------------------------------------------
+
+ - peticion(accion)   Crea el JSON con {"accion":"..."} y despues cada
+                      metodo le anade sus parametros.
+ - enviar(peticion)   Escribe la peticion en UNA linea, espera UNA linea
+                      de respuesta y la convierte en JsonObject.
+                      * Si no hay conexion, intenta conectar.
+                      * Si la conexion se ha caido, cierra, reconecta y
+                        lo intenta UNA vez mas (2 intentos en total).
+                      * Si no hay servidor devuelve null y deja en
+                        ultimoMensaje "Sin conexión con el servidor".
+                      * Si la respuesta no es un JSON valido devuelve
+                        null.
+ - fueBien(respuesta) true si la respuesta existe y trae "ok":true.
+ - datos(respuesta, tipo)  Convierte el campo "datos" de la respuesta
+                      al tipo pedido (Usuario, ArrayList<Workout>...).
+                      Devuelve null si algo ha ido mal.
+
+ Ningun metodo publico lanza excepciones: si falla el servidor
+ devuelven null, lista vacia o false (igual que GestionBD sin red).
+
+--------------------------------------------------------------------
+6. METODOS PUBLICOS
+--------------------------------------------------------------------
+
+ Usuario admin (LOCAL, no se envia nada al servidor)
+ ----------------------------------------------------
+ - esUsuarioAdmin(usuario, passwd)   true si es admin/admin.
+ - crearUsuarioAdmin()               Usuario "Admin" de nivel 4 (para
+                                     ver todos los workouts).
+
+ Peticiones a FIREBASE (el servidor llama a GestionBD)
+ -----------------------------------------------------
+ Metodo                                   Accion      Devuelve
+ validarLogin(mail, passwd)               LOGIN       Usuario o null
+ registrarUsuario(nombre, apellidos,      REGISTRO    true/false
+     mail, passwd, fechaNac)
+ existeEmail(mail)                        EXISTE_EMAIL        boolean
+ actualizarDatosUsuario(id, nombre,       ACTUALIZAR_DATOS    true/false
+     apellidos, fechaNac, mail)
+ comprobarPassword(passwd, cifrada)       COMPROBAR_PASSWORD  boolean
+ actualizarPasswordUsuario(id, nueva)     ACTUALIZAR_PASSWORD contraseña
+                                                              cifrada o
+                                                              null
+ obtenerHistoricoUsuario(idUsuario)       HISTORICO   ArrayList<Historico>
+                                                      (vacia si falla)
+ obtenerWorkouts()                        WORKOUTS    ArrayList<Workout>
+                                                      (vacia si falla)
+ datosInicialesFB()                       DATOS_INICIALES_FB  true/false
+ obtenerListadoUsuarios()                 LISTADO_USUARIOS    true/false
+
+ Peticiones a FICHEROS (los lee el servidor)
+ -------------------------------------------
+ Metodo                                   Accion      Fichero
+ obtenerWorkoutsLocales()                 WORKOUTS_LOCALES    assets/datosFB/
+                                                              gimnasio.json
+ obtenerHistoricoUsuarioXML(idUsuario)    HISTORICO_XML       assets/datosFB/
+                                                              historico_comun.xml
+ cargarUsuariosDesdeCsv()                 CARGAR_USUARIOS_CSV assets/datosFB/
+                                                              usuarios_comun.csv
+ leerBackupUsuarios()                     LEER_BACKUP_USUARIOS backups/
+                                                              usuarios.dat
+
+--------------------------------------------------------------------
+7. DETALLES A TENER EN CUENTA
+--------------------------------------------------------------------
+
+ - validarLogin: el historico del Usuario es "transient" y no viaja con
+   el login. Cliente deja el historico como lista vacia; se pide aparte
+   con obtenerHistoricoUsuario().
+ - registrarUsuario: devuelve false si el email ya existe o no hay
+   conexion. El motivo esta en getUltimoMensaje() (GestionVistas lo
+   muestra en la ventana de registro).
+ - Cuando el login falla, GestionVistas tambien muestra
+   getUltimoMensaje(): "Usuario o contraseña incorrectos" o "Sin
+   conexión con el servidor".
+ - El adaptador de LocalDate esta copiado en Cliente y en Servidor para
+   que no dependan el uno del otro el dia que se separen en dos
+   proyectos. Los dos tienen que ser iguales.
+ - Para que Gson pueda leer el modelo hace falta en module-info.java:
+   "opens modelo to google.cloud.firestore, gson;".
+
+--------------------------------------------------------------------
+8. FORMATO DE LOS MENSAJES
+--------------------------------------------------------------------
+
+ Una linea JSON por mensaje.
+
+ Cliente -> Servidor
+   {"accion":"LOGIN","email":"ana@mail.com","password":"1234567"}
+
+ Servidor -> Cliente
+   {"ok":true,"mensaje":"Login correcto","datos":{"id":2,...}}
+   {"ok":false,"mensaje":"Usuario o contraseña incorrectos"}

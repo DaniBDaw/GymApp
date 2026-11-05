@@ -1,0 +1,296 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA WORKOUT EN CURSO
+  (VentanaWorkoutEnCurso + DialogoSalir + DialogoCuentaAtras)
+  (solo puntos clave)
+====================================================================
+
+Que es: la ventana que sale al pulsar CONTINUAR en el detalle de un
+workout. Es la pantalla "Ejercicios" del enunciado: el usuario hace
+los ejercicios uno a uno con sus cronometros.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/
+ |-- PANEL -  Workout en curso (1).jpg           -> DISENO (no se usa)
+ |-- PANEL -  Workout en curso - series completadas.jpg -> DISENO
+ |-- workout_en_curso_bg.jpg   -> fondo blanco 900x600 (el "Rectangle 1"
+ |                                del diseño media 900x598)
+ |-- iconos/
+      |-- reloj.png (52x52)            -> al lado del tiempo grande
+      |-- play_blanco.png (20x20)      -> INICIAR / REANUDAR / SIGUIENTE
+      |-- pausa_blanco.png (20x20)     -> PAUSA
+      |-- completed_icon.png (73x90)   -> check original del diseño
+      |-- serie_completada.png (52x64) -> el mismo check mas pequeño, para
+                                          que quepa encima de la foto
+
+src/
+ |-- vista/VentanaWorkoutEnCurso.java -> la ventana
+ |-- vista/DialogoSalir.java          -> el aviso al pulsar SALIR
+ |-- vista/DialogoCuentaAtras.java    -> los 5 segundos en grande antes
+ |                                       de la primera serie (o de cada
+ |                                       serie, ver CUENTA_ATRAS_EN_CADA_SERIE)
+ |-- vista/UtilidadesVista.java       -> crearFotoBorrosa() (fondo de
+ |                                       los dos avisos)
+ |-- vista/EtiquetaUsuario.java       -> nombre y nivel del usuario
+ |                                       (arriba a la derecha)
+ |-- controlador/Cronometro.java      -> un cronometro = un hilo (Thread)
+ |-- controlador/GestionVistas.java   -> abrirWorkoutEnCurso() y lo que
+                                         pasa cada segundo (seccion
+                                         "Ventana de workout en curso")
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600.
+ - Usuario (EtiquetaUsuario) ......... (531,16) 342x24, pegado a la derecha
+ - "TIEMPO DEL WORKOUT" .............. (531,66) + tiempo negrita 34 a la
+                                        derecha (691,54)
+ - "Core express - Ejercicio 2 de 4" ... (41,88)
+ - Nombre del ejercicio .............. (40,106) negrita 40 (30 si tiene
+                                        mas de 20 letras)
+ - Descripcion (JTextArea) ........... (41,160) 465x66, hasta 3 lineas
+ - "TIEMPO DEL EJERCICIO" ............ (41,235)
+ - Tiempo grande ..................... (37,262) negrita 80 + reloj (262,285)
+ - Caja de la serie .................. (41,366) 179x108
+ - Caja del descanso ................. (255,366) 179x108
+ - "SERIES" .......................... centrado encima de las tarjetas
+ - Tarjetas de series ................ x=531, y=160 + n*96, 342x83
+                                        (caben 4: 160, 256, 352, 448)
+ - "● Siguiente: ..." ................ (531,545)
+ - SALIR ............................. (41,528) 121x46
+ - Boton grande ...................... (201,528) 233x46
+
+--------------------------------------------------------------------
+3. COMO FUNCIONA (lo hace el CONTROLADOR, la vista solo muestra)
+--------------------------------------------------------------------
+
+Cuatro cronometros INDEPENDIENTES, cada uno en su propio HILO (el
+enunciado dice: "Cada uno tendrá su propio comportamiento
+independiente"):
+ - cronoWorkout:   cuenta hacia ARRIBA el tiempo de todo el workout.
+ - cronoEjercicio: cuenta hacia ARRIBA el tiempo del ejercicio.
+ - cronoSerie:     cuenta hacia ABAJO: primero 5 segundos para
+                   prepararse (en GRANDE en el centro de la pantalla,
+                   ver DialogoCuentaAtras mas abajo) y despues el
+                   tiempo de la serie ("SERIE 1 - QUEDA").
+ - cronoDescanso:  cuenta hacia ABAJO el descanso ("DESCANSO - QUEDA").
+
+En que parte del MVC van: en el CONTROLADOR, porque son logica del
+programa (enunciado: "Controlador: Incluirá toda la lógica del
+programa"). La vista solo enseña los textos que le pasa el controlador.
+
+La clase Cronometro (controlador/Cronometro.java):
+ - extends Thread. El metodo run() es un bucle: Thread.sleep(1000) y,
+   si esta en marcha, suma o resta un segundo y avisa a GestionVistas
+   (GestionVistas.avisarSegundo(this)).
+ - new Cronometro(false) = hacia arriba, new Cronometro(true) = hacia
+   abajo. La cuenta atras se para sola al llegar a 0.
+ - start() arranca el hilo (se hace al abrir la ventana; los cuatro
+   empiezan parados). empezar() / pausar() lo ponen en marcha o lo
+   paran sin perder el tiempo. terminar() acaba el hilo (al ir al
+   resumen) con interrupt(), que despierta al hilo si esta en el sleep.
+ - Las variables segundos, enMarcha y terminado son "volatile": las
+   cambia el hilo de Swing (al pulsar los botones) y las lee el hilo
+   del cronometro. Con volatile los dos hilos ven siempre el valor
+   actual.
+ - Swing solo se debe tocar desde su propio hilo. Por eso avisarSegundo
+   usa SwingUtilities.invokeLater(...): le pasa el trabajo (cambiar el
+   texto, pasar a la siguiente serie) al hilo de Swing.
+ - En actualizarCronometro() el controlador mira que cronometro ha
+   avisado (crono == cronoWorkout, cronoEjercicio...) y hace lo suyo.
+
+Orden de un ejercicio:
+   preparacion (5 s) -> serie 1 -> descanso -> serie 2 -> descanso
+   -> ... -> ultima serie
+ - La preparacion solo va antes de la serie 1 (al pulsar INICIAR).
+   Se puede cambiar con la variable de GestionVistas
+   CUENTA_ATRAS_EN_CADA_SERIE (ver DialogoCuentaAtras mas abajo).
+ - Al acabar una serie su tarjeta se pone gris con el check.
+ - El descanso es el del ejercicio (ejercicio.getDescanso()).
+ - Al terminar el descanso la caja pone "DESCANSO - USADO" con el tiempo
+   descansado mientras empieza la siguiente serie (rubrica PSP: "Se
+   muestra el tiempo utilizado para el descanso cuando comienza la
+   siguiente serie").
+ - Despues de la ULTIMA serie no hay descanso: el ejercicio termina y se
+   para el cronometro del ejercicio. Si era el ultimo ejercicio tambien
+   se para el del workout.
+ - El cronometro del workout empieza con el primer INICIAR y sigue
+   contando entre ejercicios. El del ejercicio vuelve a 00:00 en cada
+   ejercicio nuevo (enunciado: "El cronómetro del ejercicio se resetea
+   a cero").
+ - Debajo de las series sale el siguiente ejercicio ("Siguiente: 2 -
+   ...") o "Último ejercicio del workout".
+
+El boton grande cambia de texto, color e icono (accionBoton):
+   INICIAR (negro)  -> empieza el workout (la primera vez), el ejercicio
+                       y la preparacion de la serie 1
+   PAUSA (amarillo) -> para los cuatro cronometros a la vez (no se ponen
+                       a cero)
+   REANUDAR (negro) -> vuelven a contar el del workout, el del ejercicio
+                       y la cuenta atras que estaba contando
+   SIGUIENTE (verde)-> carga el siguiente ejercicio (su cronometro a
+                       cero) y el boton vuelve a INICIAR
+   VER RESUMEN (verde) -> despues del ultimo ejercicio
+
+SALIR:
+ - Se paran los cronometros y sale el aviso (DialogoSalir).
+ - CANCELAR: se cierra el aviso y vuelven a contar los que estaban
+   contando (entre ejercicios solo el del workout).
+ - SALIR: se termina el workout y se va al resumen. NO se pierde lo
+   hecho: el porcentaje es ejercicios completados / total * 100 (el
+   ejercicio a medias no cuenta como completado, pero su tiempo si).
+   Mensaje del aviso (con el porcentaje de ahora, calcularPorcentaje()):
+   "Llevas el 66% del workout. Se guardará en tu histórico y los
+   ejercicios que faltan quedarán sin completar."
+   Y es verdad: abrirResumen() lo guarda en el historico con ese
+   porcentaje (ver DOCUMENTACION_VENTANA_RESUMEN.txt, punto 7).
+ - Si ya estan todos los ejercicios hechos no sale aviso (no hay nada
+   que perder): va directo al resumen.
+
+Para el resumen el controlador guarda ejerciciosCompletados y
+segundosPorEjercicio (el tiempo de cada ejercicio). El tiempo total es
+lo que marca el cronometro del workout. abrirResumen() termina los
+cuatro hilos y abre VentanaResumen (ver DOCUMENTACION_VENTANA_RESUMEN.txt).
+
+--------------------------------------------------------------------
+4. LA VISTA
+--------------------------------------------------------------------
+
+Metodos para el controlador:
+ - setUsuario("Alexis", 2, "Intermedio") -> arriba a la derecha
+ - setSubtitulo("Core express - Ejercicio 2 de 4")
+ - setEjercicio(nombre, descripcion)
+ - setSiguiente("2 - Crunch bicicleta"), setSiguiente(null) = ultimo
+ - setTiempoWorkout("12:47"), setTiempoEjercicio("02:13")
+ - setTiempoSerie("SERIE 2 - QUEDA", "00:27")
+ - setTiempoDescanso("DESCANSO - QUEDA", "00:15")
+ - setDescansoActivo(true/false): la caja que cuenta se pone negra y la
+   otra blanca con borde gris
+ - cargarSeries(nombres, detalles): una tarjeta por serie
+ - setEstadoSerie(n, SERIE_PENDIENTE / SERIE_ACTUAL / SERIE_HECHA)
+ - mostrarBotonIniciar(), mostrarBotonPausa(), mostrarBotonReanudar(),
+   mostrarBotonSiguiente(), mostrarBotonResumen()
+ - getBtnSalir(), getBtnAccion(), cerrar()
+
+Clases dibujadas a mano (dentro de la ventana):
+ - CajaCuentaAtras: caja redondeada con titulo y tiempo (negra o blanca).
+ - TarjetaSerie: tarjeta de una serie (foto: ver punto 6) con 3 aspectos:
+     pendiente = blanca con borde negro
+     actual    = negra con texto blanco (la que se esta haciendo)
+     hecha     = gris, y el check "cae" en el centro como un sello
+                 (un Timer baja la etiqueta del check 8 px cada 15 ms)
+ - BotonRedondo: boton redondeado; con color null es blanco con borde.
+   Con el raton encima se oscurece (darker), menos el negro (INICIAR /
+   REANUDAR), que se pone Estilos.COLOR_BOTON_OSCURO_HOVER. Ver
+   DOCUMENTACION_ESTILO_COMUN.txt.
+
+DialogoSalir (aviso con fondo borroso):
+ - Es un JDialog modal sin bordes, del tamano de la ventana y encima de
+   ella. Mientras esta abierto no se puede tocar la ventana de detras.
+ - Fondo borroso (UtilidadesVista.crearFotoBorrosa, la usan los dos
+   avisos): se pinta la ventana en una imagen, se hace la mitad
+   de pequeña 4 veces y despues el doble de grande 4 veces. Al cambiar
+   de tamano con BILINEAR los colores se mezclan y queda borrosa.
+   Encima, una capa negra transparente.
+ - Caja blanca en el centro con el titulo, el mensaje (lo pasa el
+   controlador) y CANCELAR / SALIR.
+
+DialogoCuentaAtras (los 5 segundos antes de la serie, en grande):
+ - Antes la cuenta de preparacion solo salia en la cajita de la serie
+   ("SERIE 1 - PREPARADO 00:04") y no se veia bien. Ahora sale encima
+   de toda la ventana: fondo borroso y oscuro, "PREPÁRATE", el numero
+   en blanco muy grande (5, 4, 3, 2, 1) y debajo
+   "Sentadilla libre · SERIE 1 DE 2 · 10 repeticiones".
+ - Cuando sale: lo decide la variable CUENTA_ATRAS_EN_CADA_SERIE de
+   GestionVistas (private static final boolean):
+     false (como esta ahora) -> solo antes de la PRIMERA serie de cada
+             ejercicio (al pulsar INICIAR). Despues de cada descanso la
+             serie siguiente empieza directamente.
+     true  -> antes de CADA serie (tambien despues de cada descanso).
+   Para cambiarlo solo hay que poner true o false. En el codigo:
+   terminarDescanso() hace "if (CUENTA_ATRAS_EN_CADA_SERIE)
+   empezarPreparacion(); else empezarSerie();". empezarSerie() es la
+   que pone el tiempo de la serie en cronoSerie y la arranca (la usa
+   tambien terminarCuentaAtrasSerie al acabar los 5 segundos).
+ - Es un JDialog sin bordes del tamano de la ventana, como DialogoSalir,
+   pero NO modal (super(ventana, false)): el controlador sigue
+   funcionando mientras se ve. setFocusableWindowState(false) para que
+   no se quede con el teclado.
+ - SIGUE A LA VENTANA (arreglado 2026-10-29): como es una ventana
+   aparte, al mover la ventana del workout la cuenta atras se quedaba
+   donde estaba. Ahora seguirVentana() le pone a la ventana un
+   ComponentAdapter: en componentMoved la cuenta atras se vuelve a
+   poner encima del contenido (setLocation(contenido
+   .getLocationOnScreen())). Al cerrarse (cerrar()) se quita con
+   removeComponentListener. Es solo visual, por eso esta en la vista.
+   (DialogoSalir no lo necesita: es modal y mientras se ve no se
+   puede mover la ventana de detras.)
+ - La cuenta la sigue llevando el hilo cronoSerie (no hay cronometro
+   nuevo). En el controlador (GestionVistas):
+     empezarPreparacion()      -> crea el dialogo y lo enseña
+     mostrarCuentaAtrasSerie() -> cada segundo: setNumero(segundos)
+     terminarCuentaAtrasSerie() -> a 0: cerrarCuentaAtras() y empieza
+                                  la serie
+     terminarCronometros()     -> al salir del workout tambien se cierra
+ - Mientras se ve no se puede pulsar PAUSA (esta tapado): son solo 5
+   segundos.
+
+--------------------------------------------------------------------
+5. CAMBIOS RESPECTO AL DISENO
+--------------------------------------------------------------------
+
+ - La serie que se esta haciendo sale en NEGRO (en el diseño no se
+   distingue cual es la actual).
+ - El check de serie hecha va en el centro de la tarjeta (como en el
+   diseño) pero mas pequeño (52x64) para que quepa entero dentro.
+   Al aparecer "cae" como un sello.
+ - La caja que esta contando es la negra: durante el descanso la negra
+   es la del DESCANSO y la de la serie se queda blanca.
+ - El cronometro del ejercicio empieza en 00:00 y cuenta hacia arriba
+   (el enunciado dice que mide el tiempo empleado).
+ - Cronometro del workout arriba a la derecha (en el dibujo del
+   enunciado sale "Cronómetro Workout 00:00" y la rubrica PSP lo pide).
+ - Nombre y nivel del usuario arriba a la derecha (rubrica ADT: "Se
+   muestra toda la información relevante [...] así como del cliente,
+   especialmente su nivel").
+ - Fuente del nombre y de los tiempos: Segoe UI (la de toda la app).
+ - "1 repetición" en singular.
+
+--------------------------------------------------------------------
+6. FOTOS DE LAS SERIES (2026-10-31)
+--------------------------------------------------------------------
+
+ Cada serie tiene una foto (serie.getFoto()): un enlace de internet de
+ placehold.co, ej: https://placehold.co/600x400?text=Sentadilla. Se
+ descarga de internet (como lo hace el otro equipo) y se pone en el
+ hueco de la tarjeta (93x63).
+
+ - GestionVistas.cargarEjercicio(): hace un array fotos[] con la URL de
+   cada serie y lo pasa a cargarSeries(nombres, detalles, fotos).
+ - GestionVistas.prepararUrlFoto(): placehold.co, si no se le dice
+   nada, devuelve la imagen en SVG y Java (ImageIcon) NO sabe leer SVG
+   (saldria "Sin imagen" siempre). Poniendo ".png" delante del "?" la
+   devuelve en PNG:  600x400?text=...  ->  600x400.png?text=...
+   Las demas URLs se dejan igual.
+ - UtilidadesVista.cargarImagenUrl(url, ancho, alto): new URI(url)
+   .toURL() -> new ImageIcon(url) (la descarga) -> si el ancho es -1 no
+   se ha podido descargar (null) -> si no, getScaledInstance(ancho,
+   alto, SCALE_SMOOTH). (new URL(texto) no se usa porque desde Java 20
+   esta "deprecated" y Eclipse lo marca en amarillo.)
+ - TarjetaSerie.cargarFoto(url): la descarga tarda un poco, asi que se
+   hace en OTRO hilo (si no, la ventana se congela al cambiar de
+   ejercicio). Mientras tanto el hueco se ve gris. Al terminar, la foto
+   se pone con SwingUtilities.invokeLater (los cambios en la ventana se
+   hacen en el hilo de Swing, igual que con los cronometros).
+ - Sin foto (URL vacia, como en el workout de prueba) o sin internet:
+   sale el texto "Sin imagen" en el hueco.
+ - Las fotos de placehold.co son solo grises con el nombre de la serie
+   escrito (son de relleno); si algun dia se ponen fotos de verdad en
+   la base de datos, salen igual sin cambiar el codigo (si son PNG o
+   JPG).
+ - Probado 2026-10-31: ventana con 3 series con foto (hecha, actual,
+   pendiente) y una sin foto ("Sin imagen"). Sin internet no se ha
+   probado.

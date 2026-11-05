@@ -1,0 +1,194 @@
+====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA AJUSTES (VentanaAjustes)
+  (solo puntos clave)
+====================================================================
+
+Que es: la ventana que se abre con el icono de ajustes de la home.
+Tiene dos pestañas en el menu negro de la izquierda:
+ - DATOS DEL USUARIO: cambiar nombre, apellidos, fecha de nacimiento
+   y email.
+ - CONTRASEÑA: cambiar la contraseña (pide la actual, la nueva y
+   repetir la nueva).
+GUARDAR guarda lo de la pestaña que se esta viendo. SALIR vuelve a la
+home (con el nombre nuevo si se ha cambiado).
+ELIMINAR CUENTA (boton rojo de la izquierda) borra la cuenta despues de
+un aviso de confirmacion (punto 4b).
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/
+ |-- ajustes_howitshouldlook.jpg -> DISENO de referencia (no se usa)
+ |-- ajustes_bg.jpg              -> fondo normal 900x600
+ |-- ajustes_bg_incorrect.jpg    -> fondo de error 900x600 (borde rojo
+ |                                  en la forma negra y pesa roja)
+ |-- iconos/
+      |-- logo_blanco_cabecera.png (32x16) -> logo de arriba a la
+      |                             izquierda: es logo_negro.png (el de la
+      |                             home) pasado a blanco. No es el mismo
+      |                             que logo_blanco.png (el del login, 44x22)
+      |-- nivel_<nivel>.png      -> icono del nivel de abajo
+
+src/
+ |-- vista/VentanaAjustes.java       -> la ventana
+ |-- vista/DialogoSalir.java         -> el aviso "¿Eliminar tu cuenta?"
+ |-- controlador/GestionVistas.java  -> abrirAjustes(),
+ |                                      ponerDatosEnAjustes(),
+ |                                      guardarDatosUsuario(),
+ |                                      guardarPassword(),
+ |                                      preguntarEliminarCuenta(),
+ |                                      eliminarCuenta()
+ |-- controlador/Cliente.java        -> existeEmail(), validarLogin(),
+ |                                      actualizarDatosUsuario(),
+ |                                      actualizarPasswordUsuario(),
+ |                                      borrarUsuario()
+ |                                      (se lo piden al servidor)
+ |-- controlador/GestionBD.java      -> lo mismo en Firebase (lo usa el
+                                        SERVIDOR, no la aplicacion)
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES (null layout + setBounds)
+--------------------------------------------------------------------
+
+Ventana 900x600.
+ Izquierda (parte negra):
+ - Logo + "GymApp" (blanco) ....... (24,14) y (62,11), como en la home
+ - "Ajustes" ....................... (26,78) negrita 44
+ - DATOS DEL USUARIO ............... (26,188) 190x22
+ - CONTRASEÑA ...................... (26,234) 190x22
+ - Punto blanco "•" ................ 15 px a la izquierda de la pestaña
+                                     elegida
+ - Nombre del usuario .............. (15,521)
+ - "Nivel" + icono + nivel ......... (15,546), icono en x=65, nivel x=83
+
+ Derecha (formulario, empieza en x=327 y mide 499 de ancho):
+ - Titulo de la pestaña ............ (327,80) negrita 38
+ - Campos: 233x37, columna 1 en x=327, columna 2 en x=593
+     fila 1 y=192, fila 2 y=276 (la etiqueta gris va 20 px encima)
+ - GUARDAR ......................... (327,347) 499x38
+ - SALIR ........................... (327,397) 499x38
+ - Mensaje rojo / verde ............ (327,447) centrado
+
+ Pestaña DATOS:       NOMBRE | APELLIDOS
+                      FECHA DE NACIMIENTO | EMAIL
+ Pestaña CONTRASEÑA:  CONTRASEÑA ACTUAL
+                      NUEVA CONTRASEÑA | REPETIR CONTRASEÑA
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Cada pestaña es un JPanel transparente (panelDatos y panelPassword)
+   con sus campos dentro. Para cambiar de pestaña se enseña un panel y
+   se oculta el otro con setVisible (mostrarDatos / mostrarPassword).
+   Tambien cambia el titulo y el punto blanco se mueve a la pestaña
+   elegida.
+ - estaEnDatos() devuelve true si se ve la pestaña de datos. Asi un
+   solo boton GUARDAR sirve para las dos pestañas.
+ - Pestañas del menu: JButton sin fondo ni borde (solo el texto). Con
+   el raton encima el texto se pone gris (MouseAdapter con
+   mouseEntered / mouseExited).
+ - Campos: fondo blanco y borde negro de 2 px con las esquinas
+   redondeadas: new BordeRedondeado(color, 2) (clase comun, ver
+   DOCUMENTACION_ESTILO_COMUN.txt). Con error el borde es rojo.
+ - Fecha: JFormattedTextField con mascara ##/##/#### (igual que en el
+   registro).
+ - GUARDAR y SALIR: clase BotonRedondeado (fillRoundRect). GUARDAR es
+   negro (Estilos.COLOR_BOTON_OSCURO). SALIR es blanco con borde negro
+   de 1.5 px (drawRoundRect con BasicStroke), igual que los botones de
+   las otras ventanas.
+ - Enter en cualquier campo = GUARDAR (setDefaultButton).
+ - Errores: mostrarError() pone el mensaje rojo y el fondo de error;
+   marcarError(campo) pone el borde rojo; limpiarErrores() lo quita
+   todo. mostrarCorrecto() pone el mensaje en verde.
+
+--------------------------------------------------------------------
+4. COMPROBACIONES (las hace el CONTROLADOR al pulsar GUARDAR)
+--------------------------------------------------------------------
+
+Se comprueba en orden y se enseña solo el primer error.
+
+ DATOS DEL USUARIO (guardarDatosUsuario), igual que en el registro:
+  1. Campos vacios -> todos en rojo + "Rellena todos los campos"
+  2. Fecha que no existe (ej: 31/02/2000) -> "La fecha no es válida"
+     Fecha de hoy o futura -> "La fecha de nacimiento no puede ser futura"
+  3. Email sin formato algo@algo.algo -> "El email no es válido"
+  4. Modo sin conexion (sin servidor o admin) -> "Modo sin conexión:
+     no se pueden guardar los cambios"
+  5. Si ha cambiado el email y ya lo tiene otro usuario
+     -> "Ese email ya lo usa otra cuenta" (se le pregunta al servidor)
+  6. Se guarda (servidor -> Firebase). Si sale bien se cambia tambien
+     usuarioRegistrado y sale "Datos guardados" en verde.
+
+ CONTRASEÑA (guardarPassword):
+  1. Campos vacios -> "Rellena todos los campos"
+  2. Nueva con menos de 6 letras (LONGITUD_MINIMA_PASSWORD, la misma
+     que en el registro)
+  3. Nueva y repetir distintas -> "Las contraseñas nuevas no coinciden"
+  4. Nueva igual que la actual -> "...tiene que ser distinta de la actual"
+  5. Modo sin conexion (sin servidor o admin) -> no se puede guardar
+  6. La actual no es la del usuario -> "La contraseña actual no es
+     correcta" (se vacian los 3 campos). Se comprueba igual que el
+     login: cliente.validarLogin(email, actual) tiene que devolver el
+     usuario.
+  7. Se guarda (servidor -> Firebase) y sale "Contraseña cambiada".
+
+ El modo sin conexion va despues de las comprobaciones de los campos
+ para poder probar los errores entrando con admin/admin.
+
+--------------------------------------------------------------------
+4b. ELIMINAR CUENTA (la D del CRUD: Delete)
+--------------------------------------------------------------------
+
+ - Boton rojo ELIMINAR CUENTA en la parte negra: (26,440) 180x38.
+   setMargin(0) para que quepa el texto (si no sale "ELIMINAR CU...").
+   Rojo = Estilos.COLOR_ERROR, con el raton encima COLOR_ERROR_HOVER.
+ - Al pulsarlo (preguntarEliminarCuenta):
+    * sin conexion -> "Modo sin conexión: no se puede eliminar la cuenta"
+    * si no, sale el aviso con el fondo borroso (DialogoSalir, con el
+      segundo constructor): "¿Eliminar tu cuenta?" + CANCELAR y
+      ELIMINAR (en rojo).
+ - CANCELAR cierra el aviso y no pasa nada.
+ - ELIMINAR (eliminarCuenta):
+    1. cliente.borrarUsuario(id) -> el servidor llama a
+       GestionBD.borrarUsuario(id): borra cada documento de su
+       subcoleccion Historico (Firestore no las borra solas) y despues
+       el documento del usuario.
+    2. Si falla -> "No se ha podido eliminar la cuenta..."
+    3. Si sale bien -> se vuelve a hacer el backup (para que la cuenta
+       borrada ya no pueda entrar sin conexion) y se abre el login.
+
+--------------------------------------------------------------------
+5. SERVIDOR Y FIREBASE (Cliente -> HiloCliente -> GestionBD)
+--------------------------------------------------------------------
+
+ La ventana no toca Firebase: GestionVistas llama a Cliente, que le
+ manda la peticion al servidor (ver DOCUMENTACION_CLIENTE_SERVIDOR.txt).
+ Despues de guardar los datos, cambiar la contraseña o eliminar la
+ cuenta se rehace el backup (lanzarBackup, ver DOCUMENTACION_BACKUPS.txt
+ punto 2): asi el login sin conexion ya usa los datos nuevos.
+ En el servidor:
+ - actualizarDatosUsuario(id, nombre, apellidos, fecha, email): usa
+   update() en usuarios/{id}. update() solo cambia esos campos, la
+   contraseña y el nivel se quedan igual. Devuelve false si falla.
+ - actualizarPasswordUsuario(id, nueva): cifra la nueva con BCrypt
+   (igual que al registrarse) y la guarda. Devuelve la cifrada para
+   ponerla tambien en usuarioRegistrado, o null si falla.
+ - existeEmail(email): usa buscarMailFB() (la del registro).
+ - borrarUsuario(id): ver punto 4b.
+ - Primero se guarda en Firebase y solo si sale bien se cambia
+   usuarioRegistrado. Asi la aplicacion y Firebase tienen lo mismo.
+
+--------------------------------------------------------------------
+6. CAMBIOS RESPECTO AL DISENO
+--------------------------------------------------------------------
+
+ - En el diseño la fecha ponia "Alexis": aqui sale la fecha real del
+   usuario en formato dd/mm/aaaa.
+ - La pestaña CONTRASEÑA no estaba dibujada: se ha hecho con el mismo
+   estilo (titulo "Contraseña", mismos campos y botones).
+ - Los titulos usan la fuente de las otras ventanas (Segoe UI negrita),
+   no la redondeada del diseño.
+ - Mensaje de error / guardado debajo de SALIR (en el diseño no habia).
+ - Boton ELIMINAR CUENTA (en el diseño no habia).

@@ -1,0 +1,204 @@
+﻿====================================================================
+  GYMAPP - DOCUMENTACION DE LA VENTANA PRINCIPAL / HOME (VentanaPrincipal)
+  (solo puntos clave)
+====================================================================
+
+Que es: la ventana que sale despues de la carga del login. Saludo con
+el nombre, nivel, tiempo total entrenando, estadisticas, dos tarjetas
+grandes (WORKOUTS e HISTORIAL) y arriba a la derecha ajustes y cerrar
+sesion.
+
+--------------------------------------------------------------------
+1. FICHEROS
+--------------------------------------------------------------------
+
+images/   (en la raiz del proyecto, no en src)
+ |-- panel_home.png                -> solo es el DISENO de referencia
+ |                                     (748x498, no se usa en el codigo)
+ |-- home_background3.jpg           -> fondo (900x600)
+ |-- home_workouts.png              -> tarjeta WORKOUTS (351x208) con las
+ |-- home_workouts_hover.png           esquinas redondeadas y el borde ya
+ |-- home_historial.png                hechos. La "_hover" es un poco mas
+ |-- home_historial_hover.png          clara/oscura (raton encima)
+ |-- home_workouts_background.jpg   -> imagenes originales de las tarjetas
+ |-- home_history_background.jpg       (de aqui salen los PNG, NO se usan)
+ |-- home_background2.jpg           -> otra version del fondo, NO se usa
+ |-- iconos/
+      |-- logo_negro.png (32x16)
+      |-- ajustes.png, ajustes_hover.png (24x24, negro y gris)
+      |-- cerrar_sesion.png, cerrar_sesion_hover.png (24x24)
+      |-- nivel_principiante.png, nivel_intermedio.png,
+      |   nivel_avanzado.png (16x16, diamante de cada color)
+      |-- tiempo.png, estadisticas.png (16x16)
+
+src/
+ |-- vista/VentanaPrincipal.java       -> la ventana
+ |-- vista/Estilos.java                -> colores y fuentes (ver punto 6)
+ |-- controlador/GestionVistas.java    -> abrirPrincipal() y ponerDatosUsuario()
+
+--------------------------------------------------------------------
+2. TAMANO Y POSICIONES
+--------------------------------------------------------------------
+
+ - El diseno es de 748x498 y se ha escalado x1.2 aprox. La ventana mide
+   lo que mide el fondo (pack()): 900x600. El login mide 900x590, asi
+   que al pasar de uno a otro la ventana se mueve 5 px hacia arriba.
+ - Layout null + setBounds, como en el login. Todas las posiciones son
+   fijas. Las principales son constantes al principio de la clase:
+     MARGEN = 70                 -> textos y tarjetas empiezan aqui
+     "Bienvenido"                -> setBounds(70, 122, 120, 30)
+     nombre                      -> setBounds(187, 85, 600, 76)
+     FILA_NIVEL_Y = 161, FILA_TIEMPO_Y = 185,
+     FILA_ESTADISTICAS_Y = 209   -> las tres filas (icono 16 px en x=70
+                                    y texto en TEXTO_FILA_X = 94)
+     linea gris                  -> y = 248
+     TARJETA_Y = 280, 351x208    -> tarjetas, separadas 54 px
+     AJUSTES_X = 712, CERRAR_SESION_X = 758, ICONOS_Y = 9 -> iconos
+       (34x34). Van en NEGRO sobre la parte blanca: la forma negra del
+       fondo empieza en x = 800 aprox. y si se ponen mas a la derecha
+       quedan mitad sobre blanco y mitad sobre negro.
+
+--------------------------------------------------------------------
+3. COMO ESTA HECHA
+--------------------------------------------------------------------
+
+ - Todos los iconos son imagenes PNG (carpeta iconos) que se cargan con
+   UtilidadesVista.cargarImagen(). No se dibuja nada con codigo.
+ - "Bienvenido": letra normal y cursiva (FUENTE_BIENVENIDO), mas fina
+   que el nombre para que el nombre destaque. El nombre va a su derecha
+   en una posicion fija (como "Bienvenido" nunca cambia, siempre ocupa
+   lo mismo).
+ - Nivel: tres JLabel seguidos: "Nivel - " gris, el nivel actual y el
+   siguiente ("→  Avanzado"). El nivel actual cambia de largo, asi que
+   setNivel() mide cuantos pixeles ocupa con
+       getFontMetrics(fuente).stringWidth(texto)
+   y pone el siguiente justo detras.
+ - Cada nivel tiene su color (Estilos): Principiante verde, Intermedio
+   dorado, Avanzado rojo. obtenerColorNivel(nombre) lo elige.
+     * Nivel actual: su color entero. El icono es
+       "nivel_" + nombre en minusculas + ".png" (ej: nivel_intermedio.png).
+     * Siguiente nivel: su color pero transparente, porque todavia no se
+       ha conseguido: new Color(r, g, b, OPACIDAD_SIGUIENTE_NIVEL = 110)
+       (el cuarto numero es la opacidad, de 0 a 255).
+       Tooltip: "Completa un workout de nivel X para subir a Y".
+     * Nivel maximo: "· Nivel máximo" en gris.
+ - Estadisticas: icono de check + "12 workouts completados · Último: ayer".
+ - Botones de icono (metodo crearBotonIcono): JButton con setIcon() y
+   setRolloverIcon(), que es el icono que sale con el raton encima
+   (el gris). quitarAspectoBoton() le quita el fondo, el borde y el foco.
+ - Tarjetas (metodo crearTarjeta): JButton con la imagen de la tarjeta
+   como icono y la imagen "_hover" con setRolloverIcon(). Un JButton
+   tambien es un contenedor: con setLayout(null) se le anaden dos JLabel
+   encima de la imagen (titulo y subtitulo). Los colores del texto se le
+   pasan: WORKOUTS blanco (imagen negra), HISTORIAL negro (imagen blanca).
+   El texto esta un poco por debajo del centro para no tocar el reloj de
+   la imagen de HISTORIAL (y en WORKOUTS a la misma altura).
+   Al ser JButton, el controlador solo tiene que anadir un ActionListener.
+ - Pie: año actual con LocalDate.now().getYear().
+
+--------------------------------------------------------------------
+4. APARICION SUAVE
+--------------------------------------------------------------------
+
+ - Clase interna PanelFundido: un panel blanco que tapa toda la ventana.
+   Se pone como "glass pane" (setGlassPane), que es una capa que Swing
+   pinta por encima de todo lo demas.
+ - En paintComponent se pinta el blanco con AlphaComposite y la opacidad
+   que tenga (1 = blanco del todo, 0 = invisible).
+ - mostrar() lo pone en 1 y un Timer le baja la opacidad un 5% cada
+   20 ms (unos 400 ms). Al llegar a 0 se oculta.
+ - Por eso se abre con mostrar() y no con setVisible(true).
+ - cerrar() para el Timer y hace dispose().
+
+--------------------------------------------------------------------
+5. METODOS PARA EL CONTROLADOR
+--------------------------------------------------------------------
+
+ - setNombreUsuario(usuario.getNombre())
+ - setNivel("Intermedio", "Avanzado") -> "Nivel - Intermedio → Avanzado"
+   setNivel("Avanzado", null)         -> "Nivel - Avanzado · Nivel máximo"
+   (Niveles: se empieza en Principiante y cada workout completado de tu
+   nivel te sube al siguiente. Que nivel es el siguiente lo decide el
+   controlador. Los nombres tienen que ser Principiante, Intermedio o
+   Avanzado para que salgan su color y su icono.)
+ - setTiempoTotal("0.5h")   -> "Tiempo total entrenando: 0.5h"
+ - setEstadisticas(12, "ayer") -> "12 workouts completados · Último: ayer"
+   setEstadisticas(1, null)    -> "1 workout completado"
+   setEstadisticas(0, ...)     -> "Aún no has completado ningún workout"
+ - getBtnWorkouts(), getBtnHistorial(), getBtnAjustes(),
+   getBtnCerrarSesion()
+ - mostrar(), cerrar()
+
+En GestionVistas (abrirPrincipal):
+ - Workouts: llama a abrirWorkouts(), que abre VentanaWorkouts (y desde ahi VER WORKOUT abre VentanaDetalleWorkout).
+   Ver DOCUMENTACION_VENTANA_WORKOUTS.txt.
+ - Ajustes: llama a abrirAjustes(), que abre VentanaAjustes (ver
+   DOCUMENTACION_VENTANA_AJUSTES.txt). SALIR vuelve a la home.
+ - Historial: abre la ventana del historico (VentanaHistorico, ver
+   DOCUMENTACION_VENTANA_HISTORICO.txt). Su VOLVER vuelve a la home.
+ - Cerrar sesion: abre un login nuevo y cierra la principal.
+
+--------------------------------------------------------------------
+5b. DATOS DEL USUARIO (GestionVistas.ponerDatosUsuario)
+--------------------------------------------------------------------
+
+ - Explicacion completa y paso a paso en DOCUMENTACION_DATOS_USUARIO.txt
+ - Ya NO hay datos de prueba ("Alexis", etc.). Al hacer login,
+   cliente.validarLogin() (el servidor lo busca en Firebase) devuelve el Usuario y se guarda
+   en usuarioRegistrado. abrirPrincipal() llama a ponerDatosUsuario(),
+   que le pasa a la ventana sus datos:
+     * Nombre: usuarioRegistrado.getNombre()
+     * Nivel: en Firebase es un numero. Se pasa a texto con el array
+         NIVELES = { "Principiante", "Intermedio", "Avanzado" }
+       (0 = Principiante, 1 = Intermedio, 2 = Avanzado). El siguiente
+       nivel es NIVELES[nivel + 1], o null si ya esta en el ultimo
+       ("Nivel máximo"). Si llega un numero raro se usa 0.
+       Para anadir un nivel: anadirlo al array (y su color e icono).
+     * Tiempo total: suma de getTiempoTotal() de todo su historico.
+       Se supone que esta en SEGUNDOS y se pasa a horas con un decimal
+       (/ 3600.0 y String.format("%.1fh")). Ej: 1800 s -> "0,5h".
+     * Workouts completados: historico.size()
+     * Ultimo: la fecha mas reciente del historico, con
+       textoUltimoWorkout(): "hoy", "ayer" o "dd/MM/yyyy".
+     * Si el historico es null o esta vacio: 0,0h y "Aún no has
+       completado ningún workout".
+
+--------------------------------------------------------------------
+6. CAMBIOS RESPECTO AL DISENO
+--------------------------------------------------------------------
+
+ - Fondo nuevo (home_background3) con formas distintas a las del diseno:
+   por eso los iconos de arriba ahora son negros y estan un poco mas a
+   la izquierda (ver punto 2).
+ - Saludo subido unos 25 px (habia mucho hueco arriba). Esta ventana
+   NO tiene fecha (se probo y se quito).
+ - Nuevo: siguiente nivel al lado del actual y fila de estadisticas.
+ - Tarjetas con esquinas redondeadas (como la caja del login), borde
+   negro fino (si no, la tarjeta blanca de HISTORIAL no se distingue del
+   fondo blanco), un subtitulo pequeno y efecto al pasar el raton.
+ - Dorado de Intermedio mas oscuro que el del diseno para que se lea
+   bien sobre blanco. Principiante y Avanzado: verde y rojo.
+ - "Bienvenido" en cursiva fina en vez de negrita.
+ - Pie en castellano: "© 2026 GymApp · Todos los derechos reservados".
+ - Tooltips "Ajustes" y "Cerrar sesión" en los iconos.
+ - En Estilos: COLOR_SEPARADOR, COLOR_TEXTO_TARJETA, COLOR_PIE,
+   COLOR_NIVEL_PRINCIPIANTE, COLOR_NIVEL_INTERMEDIO, COLOR_NIVEL_AVANZADO,
+   FUENTE_LOGO_TEXTO, FUENTE_BIENVENIDO, FUENTE_NOMBRE, FUENTE_TARJETA.
+
+--------------------------------------------------------------------
+7. SI SE CAMBIA UNA IMAGEN DE TARJETA
+--------------------------------------------------------------------
+
+ - Las tarjetas usan los PNG ya redondeados (no los .jpg originales).
+   Una imagen nueva tiene que ser 351x208, en PNG, con las esquinas
+   redondeadas (radio de 10 px) y el borde negro de 2 px, mas su version
+   "_hover" (la misma con una capa del 10% del color del texto encima).
+
+--------------------------------------------------------------------
+8. AL PASARLO AL PROYECTO REAL
+--------------------------------------------------------------------
+
+ - Copiar src/vista/ y la carpeta images entera (con la subcarpeta
+   iconos) en la RAIZ del proyecto, al lado de src.
+ - Hecho: abrirPrincipal() esta en GestionVistas y los datos salen del
+   usuario de Firebase (punto 5b).
